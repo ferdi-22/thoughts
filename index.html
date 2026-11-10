@@ -98,12 +98,8 @@
     <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.
     Der Schlüssel bleibt nur auf diesem Gerät.</div>
   <label for="modelIn">KI-Modell</label>
-  <select id="modelIn">
-    <option value="gemini-2.5-flash">gemini-2.5-flash (empfohlen)</option>
-    <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite (schneller)</option>
-    <option value="gemini-flash-latest">gemini-flash-latest</option>
-    <option value="gemini-flash-lite-latest">gemini-flash-lite-latest</option>
-  </select>
+  <select id="modelIn"></select>
+  <div class="small" style="margin-top:6px">„Automatisch“ nimmt ein verfügbares Modell und weicht bei Überlastung auf ein anderes aus.</div>
   <div class="actions">
     <button class="btn" id="testBtn" type="button">Verbindung testen</button>
   </div>
@@ -118,7 +114,10 @@
 /* Gedankenblitz – Chat, der jede Nachricht ins Englische übersetzt (Google Gemini).
    Alles läuft im Browser; Verlauf und Schlüssel liegen im localStorage. */
 
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+const DEFAULT_MODEL = 'auto';
+const API = 'https://generativelanguage.googleapis.com/v1beta';
+// Reihenfolge für „Automatisch“, falls die Modellliste nicht geladen werden kann
+const FALLBACK_MODELS = ['gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash'];
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -127,7 +126,7 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); } catch {} },
 };
 const getKey   = () => store.get('gb_key', '').trim();
-const getModel = () => store.get('gb_chat_model', DEFAULT_MODEL);
+const getModel = () => store.get('gb_model_v2', DEFAULT_MODEL);
 
 let messages = [];
 try { messages = JSON.parse(store.get('gb_chat', '[]')) || []; } catch { messages = []; }
@@ -171,10 +170,55 @@ Translate the user's message into natural, fluent English.
 - Keep the meaning, tone, line breaks and emojis.
 - If the message is already English, return it with spelling and grammar corrected.`;
 
+/* Verfügbare Modelle beim eigenen Schlüssel abfragen (Text-Modelle mit generateContent). */
+let available = [];
+try { available = JSON.parse(store.get('gb_models', '[]')) || []; } catch {}
+async function loadModels(key = getKey()) {
+  if (!key) return available;
+  try {
+    const res = await fetch(`${API}/models?pageSize=1000`, { headers: { 'x-goog-api-key': key } });
+    if (!res.ok) return available;
+    const json = await res.json();
+    const skip = /(tts|image|embed|live|audio|robotics|computer|vision|aqa|learnlm|gemma|veo|imagen|thinking|exp)/i;
+    available = (json.models || [])
+      .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+      .map(m => m.name.replace(/^models\//, ''))
+      .filter(n => n.startsWith('gemini') && !skip.test(n));
+    // schnelle Modelle zuerst: flash-lite, dann flash, dann der Rest
+    const rank = n => (/flash-lite/.test(n) ? 0 : /flash/.test(n) ? 1 : 2) + (/preview/.test(n) ? 0.5 : 0);
+    available.sort((a, b) => rank(a) - rank(b) || b.localeCompare(a));
+    store.set('gb_models', JSON.stringify(available));
+  } catch {}
+  return available;
+}
+function fillModelSelect(selected = getModel()) {
+  const opts = ['auto', ...new Set([...(available.length ? available : FALLBACK_MODELS), selected].filter(m => m && m !== 'auto'))];
+  $('#modelIn').innerHTML = opts.map(m => `<option value="${esc(m)}">${m === 'auto' ? 'Automatisch (empfohlen)' : esc(m)}</option>`).join('');
+  $('#modelIn').value = selected;
+}
+function candidates(model) {
+  const pool = available.length ? available : FALLBACK_MODELS;
+  return [...new Set(model === 'auto' ? pool : [model, ...pool])].slice(0, 5);
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function translate(text, model = getModel()) {
+  if (!getKey()) throw new Error('Kein API-Schlüssel eingetragen. Bitte unter ⚙️ eintragen.');
+  let lastErr;
+  for (const m of candidates(model)) {
+    try { return await translateWith(text, m); }
+    catch (err) {
+      lastErr = err;
+      if (!err.retry) throw err;           // z. B. falscher Schlüssel → nicht weiter probieren
+      await sleep(600);
+    }
+  }
+  throw lastErr;
+}
+
+async function translateWith(text, model) {
   const key = getKey();
-  if (!key) throw new Error('Kein API-Schlüssel eingetragen. Bitte unter ⚙️ eintragen.');
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+  const url = `${API}/models/${encodeURIComponent(model)}:generateContent`;
   const body = {
     systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
     contents: [{ role: 'user', parts: [{ text }] }],
@@ -187,15 +231,18 @@ async function translate(text, model = getModel()) {
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = json.error?.message || res.statusText || 'unbekannt';
-    if (res.status === 429) throw new Error('Kostenloses Limit erreicht – bitte kurz warten. (' + msg + ')');
+    const fail = (text, retry) => Object.assign(new Error(text), { retry });
     if (res.status === 401 || res.status === 403 || /API key/i.test(msg))
-      throw new Error('API-Schlüssel wird nicht akzeptiert. Bitte unter ⚙️ prüfen. (' + msg + ')');
-    if (res.status === 404) throw new Error(`Modell „${model}“ nicht gefunden – bitte unter ⚙️ ein anderes wählen.`);
-    throw new Error(`KI-Fehler ${res.status}: ${msg}`);
+      throw fail('API-Schlüssel wird nicht akzeptiert. Bitte unter ⚙️ prüfen. (' + msg + ')', false);
+    if (res.status === 429) throw fail('Kostenloses Limit erreicht – bitte eine Minute warten. (' + model + ')', true);
+    if (res.status === 404) throw fail(`Modell „${model}“ gibt es nicht (mehr).`, true);
+    if (res.status >= 500) throw fail(`Google-Server gerade überlastet (${model}) – bitte gleich nochmal versuchen.`, true);
+    throw fail(`KI-Fehler ${res.status} (${model}): ${msg}`, false);
   }
   const cand = json.candidates?.[0];
   const out = (cand?.content?.parts || []).filter(p => !p.thought).map(p => p.text || '').join('').trim();
-  if (!out) throw new Error('Leere Antwort von der KI' + (cand?.finishReason ? ` (${cand.finishReason})` : json.promptFeedback?.blockReason ? ` (${json.promptFeedback.blockReason})` : '') + '.');
+  if (!out) throw Object.assign(new Error('Leere Antwort von der KI' + (cand?.finishReason ? ` (${cand.finishReason})` : json.promptFeedback?.blockReason ? ` (${json.promptFeedback.blockReason})` : '') + '.'), { retry: true });
+  lastModel = model;
   return out;
 }
 
@@ -227,27 +274,34 @@ $('#clearBtn').addEventListener('click', () => {
 });
 
 /* ---------- Einstellungen ---------- */
+let lastModel = '';
 function openSettings() {
-  $('#keyIn').value = getKey(); $('#modelIn').value = getModel(); $('#testOut').textContent = '';
+  $('#keyIn').value = getKey(); fillModelSelect(); $('#testOut').textContent = '';
   $('#settings').showModal();
 }
 $('#settingsBtn').addEventListener('click', openSettings);
 $('#closeBtn').addEventListener('click', () => $('#settings').close());
 $('#saveBtn').addEventListener('click', () => {
   store.set('gb_key', $('#keyIn').value.trim());
-  store.set('gb_chat_model', $('#modelIn').value);
+  store.set('gb_model_v2', $('#modelIn').value);
   $('#settings').close(); render();
 });
 $('#testBtn').addEventListener('click', async () => {
   const out = $('#testOut'), old = getKey();
   store.set('gb_key', $('#keyIn').value.trim());
-  out.textContent = 'Teste …';
-  try { out.textContent = '✅ Klappt: „Guten Morgen“ → „' + await translate('Guten Morgen', $('#modelIn').value) + '“'; }
+  out.textContent = 'Lade verfügbare Modelle …';
+  const sel = $('#modelIn').value;
+  await loadModels(); fillModelSelect(sel);
+  out.textContent = `Teste (${available.length || FALLBACK_MODELS.length} Modelle verfügbar) …`;
+  try {
+    const r = await translate('Guten Morgen', sel);
+    out.textContent = `✅ Klappt mit ${lastModel}: „Guten Morgen“ → „${r}“`;
+  }
   catch (err) { out.textContent = '❌ ' + err.message; store.set('gb_key', old); }
 });
 
 render();
-if (!getKey()) openSettings();
+if (!getKey()) openSettings(); else loadModels();
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
