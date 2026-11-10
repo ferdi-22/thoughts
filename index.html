@@ -29,6 +29,9 @@
     border-bottom:1px solid var(--border); flex:none}
   header h1{font-size:1.2rem; margin:0}
   header .sub{font-size:.8rem; color:var(--muted)}
+  header .ver{opacity:.7; font-variant-numeric:tabular-nums}
+  .newbtn{background:var(--card2); color:var(--text); border:1px solid var(--border); border-radius:999px;
+    padding:6px 12px; font-size:.85rem; cursor:pointer; vertical-align:middle}
   .iconbtn{background:none; border:none; color:var(--text); font-size:1.3rem; padding:6px; cursor:pointer}
 
   #chat{flex:1; overflow-y:auto; padding:16px}
@@ -80,10 +83,10 @@
 <header>
   <div>
     <h1>⚡ Gedankenblitz</h1>
-    <div class="sub">Englisch üben im Chat mit Sam</div>
+    <div class="sub">Englisch üben im Chat mit Sam <span class="ver" id="ver"></span></div>
   </div>
   <div>
-    <button class="iconbtn" id="clearBtn" aria-label="Verlauf löschen" title="Verlauf löschen">🗑️</button>
+    <button class="newbtn" id="clearBtn" title="Gespräch neu starten">↺ Neu</button>
     <button class="iconbtn" id="settingsBtn" aria-label="Einstellungen" title="Einstellungen">⚙️</button>
   </div>
 </header>
@@ -127,6 +130,12 @@
 <script>
 /* Gedankenblitz – Englisch-Gesprächspartner zum Üben (Google Gemini).
    Alles läuft im Browser; Verlauf und Schlüssel liegen im localStorage. */
+
+/* Versionsnummer: MAJOR.MINOR.PATCH – bei jeder Änderung erhöhen!
+   PATCH (1.4.0 → 1.4.1): kleine Korrekturen, z. B. Texte, Stimme, Farben
+   MINOR (1.4.1 → 1.5.0): neue Funktion
+   MAJOR (1.5.0 → 2.0.0): App grundlegend umgebaut */
+const APP_VERSION = '1.4.0';
 
 const DEFAULT_MODEL = 'auto';
 const API = 'https://generativelanguage.googleapis.com/v1beta';
@@ -341,8 +350,10 @@ $('#form').addEventListener('submit', async e => {
   save(); $('#sendBtn').disabled = false; render(); input.focus();
 });
 
+// Gespräch neu starten: Verlauf leeren, Sam fängt von vorn an
 $('#clearBtn').addEventListener('click', () => {
-  if (messages.length && confirm('Ganzen Verlauf löschen?')) { messages = []; save(); render(); }
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  messages = []; save(); render(); input.focus();
 });
 
 /* ---------- Einstellungen ---------- */
@@ -373,10 +384,11 @@ $('#testBtn').addEventListener('click', async () => {
   catch (err) { out.textContent = '❌ ' + err.message; store.set('gb_key', old); }
 });
 
+$('#ver').textContent = 'v' + APP_VERSION;
 render();
 if (!getKey()) openSettings(); else loadModels();
 
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=' + APP_VERSION).catch(() => {});
 </script>
 </body>
 </html>
