@@ -107,6 +107,19 @@
   <div class="small" style="margin-top:6px">Kostenlos erstellen unter
     <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.
     Der Schlüssel bleibt nur auf diesem Gerät.</div>
+  <label for="voiceIn">Stimme beim Vorlesen 🔊</label>
+  <select id="voiceIn">
+    <optgroup label="KI-Stimme (lokal, klingt natürlich)">
+      <option value="af_heart">Heart – Frau, amerikanisch</option>
+      <option value="af_bella">Bella – Frau, amerikanisch</option>
+      <option value="am_michael">Michael – Mann, amerikanisch</option>
+      <option value="am_fenrir">Fenrir – Mann, amerikanisch</option>
+      <option value="bf_emma">Emma – Frau, britisch</option>
+      <option value="bm_george">George – Mann, britisch</option>
+    </optgroup>
+    <option value="device">Gerätestimme (schnell, ohne Download)</option>
+  </select>
+  <div class="small" style="margin-top:6px">Die KI-Stimme läuft direkt auf deinem Gerät. Beim ersten Vorlesen wird sie einmalig geladen (ca. 90 MB, am besten im WLAN).</div>
   <label for="levelIn">Dein Englisch-Niveau</label>
   <select id="levelIn">
     <option value="A2">Anfänger (A2) – einfache Sätze</option>
@@ -135,7 +148,7 @@
    PATCH (1.4.0 → 1.4.1): kleine Korrekturen, z. B. Texte, Stimme, Farben
    MINOR (1.4.1 → 1.5.0): neue Funktion
    MAJOR (1.5.0 → 2.0.0): App grundlegend umgebaut */
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.5.0';
 
 const DEFAULT_MODEL = 'auto';
 const API = 'https://generativelanguage.googleapis.com/v1beta';
@@ -187,17 +200,77 @@ $('#list').addEventListener('click', async e => {
     catch { e.target.textContent = 'Nicht möglich'; }
     setTimeout(() => (e.target.textContent = 'Kopieren'), 1500);
   }
-  if (s != null && 'speechSynthesis' in window) {
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(messages[s].text);
-    u.lang = 'en-US';
-    const voices = speechSynthesis.getVoices().filter(v => v.lang.startsWith('en'));
-    u.voice = voices.find(v => /Natural|Premium|Enhanced|Google/.test(v.name)) || voices[0];
-    u.rate = 0.95;   // etwas langsamer = leichter zu verstehen
-    speechSynthesis.speak(u);
-
-  }
+  if (s != null) e.target.textContent === '⏹' ? stopSpeaking() : speak(messages[s].text, e.target);
 });
+
+/* ---------- Vorlesen ---------- */
+const getVoice = () => store.get('gb_voice', 'af_heart');
+let player = null;   // gerade laufende Wiedergabe
+
+function stopSpeaking() {
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  if (player) { player.pause(); player = null; }
+  document.querySelectorAll('[data-speak]').forEach(b => { if (b.textContent === '⏹') b.textContent = '🔊'; });
+}
+
+async function speak(text, btn) {
+  stopSpeaking();
+  if (getVoice() === 'device') return speakDevice(text);
+  try { await speakKokoro(text, btn); }
+  catch (err) {
+    console.error(err);
+    btn.textContent = '🔊';
+    alert('Die KI-Stimme konnte nicht geladen werden – ich nehme die Gerätestimme.\n\n' + err.message);
+    speakDevice(text);
+  }
+}
+
+// Gerätestimme: schnell, ohne Download, klingt aber oft nach Computer
+function speakDevice(text) {
+  if (!('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'en-US';
+  const voices = speechSynthesis.getVoices().filter(v => v.lang.startsWith('en'));
+  u.voice = voices.find(v => /Natural|Premium|Enhanced|Google/.test(v.name)) || voices[0];
+  u.rate = 0.95;   // etwas langsamer = leichter zu verstehen
+  speechSynthesis.speak(u);
+}
+
+// Lokale KI-Stimme (Kokoro): rechnet im Hintergrund-Worker (tts-worker.js)
+let ttsWorker = null, ttsReady = false, ttsJobs = 0;
+const ttsWaiting = new Map();   // Auftragsnummer → { resolve, reject }
+function getWorker() {
+  if (ttsWorker) return ttsWorker;
+  ttsWorker = new Worker('tts-worker.js?v=' + APP_VERSION, { type: 'module' });
+  ttsWorker.onmessage = ({ data }) => {
+    if (data.type === 'progress') document.querySelectorAll('[data-speak].loading').forEach(b => (b.textContent = `⏳ ${data.percent} %`));
+    if (data.type === 'ready') ttsReady = true;
+    const job = ttsWaiting.get(data.id);
+    if (!job) return;
+    ttsWaiting.delete(data.id);
+    data.type === 'audio' ? job.resolve(data.blob) : job.reject(new Error(data.message));
+  };
+  ttsWorker.onerror = e => {
+    ttsWaiting.forEach(j => j.reject(new Error(e.message || 'Worker-Fehler'))); ttsWaiting.clear();
+    ttsWorker = null;
+  };
+  return ttsWorker;
+}
+async function speakKokoro(text, btn) {
+  btn.classList.add('loading');
+  btn.textContent = ttsReady ? '⏳' : '⏳ lädt …';
+  try {
+    const id = ++ttsJobs;
+    const blob = await new Promise((resolve, reject) => {
+      ttsWaiting.set(id, { resolve, reject });
+      getWorker().postMessage({ id, text, voice: getVoice(), speed: 0.95 });
+    });
+    player = new Audio(URL.createObjectURL(blob));
+    btn.textContent = '⏹';
+    player.onended = player.onpause = () => (btn.textContent = '🔊');
+    await player.play();
+  } finally { btn.classList.remove('loading'); if (btn.textContent.startsWith('⏳')) btn.textContent = '🔊'; }
+}
 
 /* ---------- KI ---------- */
 const LEVELS = {
@@ -352,14 +425,14 @@ $('#form').addEventListener('submit', async e => {
 
 // Gespräch neu starten: Verlauf leeren, Sam fängt von vorn an
 $('#clearBtn').addEventListener('click', () => {
-  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  stopSpeaking();
   messages = []; save(); render(); input.focus();
 });
 
 /* ---------- Einstellungen ---------- */
 let lastModel = '';
 function openSettings() {
-  $('#keyIn').value = getKey(); $('#levelIn').value = getLevel(); fillModelSelect(); $('#testOut').textContent = '';
+  $('#keyIn').value = getKey(); $('#levelIn').value = getLevel(); $('#voiceIn').value = getVoice(); fillModelSelect(); $('#testOut').textContent = '';
   $('#settings').showModal();
 }
 $('#settingsBtn').addEventListener('click', openSettings);
@@ -368,6 +441,7 @@ $('#saveBtn').addEventListener('click', () => {
   store.set('gb_key', $('#keyIn').value.trim());
   store.set('gb_model_v2', $('#modelIn').value);
   store.set('gb_level', $('#levelIn').value);
+  store.set('gb_voice', $('#voiceIn').value);
   $('#settings').close(); render();
 });
 $('#testBtn').addEventListener('click', async () => {
