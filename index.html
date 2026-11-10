@@ -180,8 +180,13 @@ $('#list').addEventListener('click', async e => {
   }
   if (s != null && 'speechSynthesis' in window) {
     speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(messages[s].text); u.lang = 'en-US';
+    const u = new SpeechSynthesisUtterance(messages[s].text);
+    u.lang = 'en-US';
+    const voices = speechSynthesis.getVoices().filter(v => v.lang.startsWith('en'));
+    u.voice = voices.find(v => /Natural|Premium|Enhanced|Google/.test(v.name)) || voices[0];
+    u.rate = 0.95;   // etwas langsamer = leichter zu verstehen
     speechSynthesis.speak(u);
+
   }
 });
 
