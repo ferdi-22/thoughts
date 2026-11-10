@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="theme-color" content="#0f172a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -15,726 +15,241 @@
 <style>
   :root{
     --bg:#0f172a; --card:#1e293b; --card2:#273449; --text:#e2e8f0; --muted:#94a3b8;
-    --accent:#f59e0b; --rec:#ef4444; --ok:#22c55e; --border:#334155;
+    --accent:#f59e0b; --err:#ef4444; --border:#334155;
   }
   @media (prefers-color-scheme: light){
     :root{ --bg:#f8fafc; --card:#ffffff; --card2:#f1f5f9; --text:#0f172a; --muted:#64748b; --border:#e2e8f0; }
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
-  html,body{margin:0; background:var(--bg); color:var(--text);
+  html,body{margin:0; height:100%; background:var(--bg); color:var(--text);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; font-size:16px}
-  body{padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
-  header{display:flex; align-items:center; justify-content:space-between; padding:14px 18px}
-  header h1{font-size:1.3rem; margin:0}
-  .iconbtn{background:none; border:none; color:var(--text); font-size:1.4rem; padding:6px; cursor:pointer}
-  main{max-width:640px; margin:0 auto; padding:0 16px 40px}
+  body{display:flex; flex-direction:column; height:100dvh;
+    padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+  header{display:flex; align-items:center; justify-content:space-between; padding:12px 16px;
+    border-bottom:1px solid var(--border); flex:none}
+  header h1{font-size:1.2rem; margin:0}
+  header .sub{font-size:.8rem; color:var(--muted)}
+  .iconbtn{background:none; border:none; color:var(--text); font-size:1.3rem; padding:6px; cursor:pointer}
 
-  /* Aufnahme-Bereich */
-  .recorder{background:var(--card); border-radius:20px; padding:22px 16px; text-align:center; margin-bottom:18px}
-  #recBtn{width:120px; height:120px; border-radius:50%; border:none; background:var(--accent);
-    color:#111; font-size:3rem; cursor:pointer; box-shadow:0 6px 24px rgba(245,158,11,.35); transition:transform .15s}
-  #recBtn:active{transform:scale(.95)}
-  #recBtn.recording{background:var(--rec); color:#fff; animation:pulse 1.2s infinite}
-  #recBtn:disabled{opacity:.5}
-  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.6)}70%{box-shadow:0 0 0 22px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
-  #status{margin-top:12px; color:var(--muted); min-height:1.3em}
-  .meter{height:8px; background:var(--card2); border-radius:99px; overflow:hidden; margin:14px auto 0; max-width:260px; visibility:hidden}
-  .meter.on{visibility:visible}
-  .meter div{height:100%; width:0; background:var(--ok); transition:width .08s}
-  @media (min-width:900px){ main{max-width:760px} }
-  #timer{font-variant-numeric:tabular-nums; font-weight:600; color:var(--text)}
-  .typerow{display:flex; gap:8px; margin-top:14px}
-  .typerow input{flex:1}
-  input,textarea{background:var(--card2); color:var(--text); border:1px solid var(--border);
+  #chat{flex:1; overflow-y:auto; padding:16px}
+  .wrap{max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:10px}
+  .msg{max-width:85%; padding:10px 14px; border-radius:18px; line-height:1.4; white-space:pre-wrap; word-wrap:break-word}
+  .msg.me{align-self:flex-end; background:var(--accent); color:#111; border-bottom-right-radius:6px}
+  .msg.ai{align-self:flex-start; background:var(--card); border:1px solid var(--border); border-bottom-left-radius:6px}
+  .msg.err{align-self:flex-start; background:transparent; border:1px solid var(--err); color:var(--err); font-size:.9rem}
+  .msg .lang{display:block; font-size:.7rem; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); margin-bottom:4px}
+  .msg .tools{display:flex; gap:6px; margin-top:8px}
+  .msg .tools button{background:var(--card2); color:var(--text); border:1px solid var(--border); border-radius:10px;
+    padding:4px 10px; font-size:.8rem; cursor:pointer}
+  .empty{text-align:center; color:var(--muted); padding:40px 16px; line-height:1.5}
+  .typing{display:inline-flex; gap:4px}
+  .typing i{width:7px; height:7px; border-radius:50%; background:var(--muted); animation:blink 1s infinite}
+  .typing i:nth-child(2){animation-delay:.15s} .typing i:nth-child(3){animation-delay:.3s}
+  @keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
+
+  form{flex:none; border-top:1px solid var(--border); padding:10px 12px; background:var(--bg)}
+  form .row{max-width:720px; margin:0 auto; display:flex; gap:8px; align-items:flex-end}
+  textarea{flex:1; resize:none; max-height:40vh; min-height:46px; background:var(--card2); color:var(--text);
+    border:1px solid var(--border); border-radius:14px; padding:12px; font:inherit}
+  input,select{background:var(--card2); color:var(--text); border:1px solid var(--border);
     border-radius:12px; padding:11px 12px; font-size:1rem; width:100%}
   button.btn{background:var(--card2); color:var(--text); border:1px solid var(--border);
-    border-radius:12px; padding:10px 14px; font-size:.95rem; cursor:pointer; white-space:nowrap}
+    border-radius:12px; padding:10px 14px; font-size:.95rem; cursor:pointer}
   button.primary{background:var(--accent); color:#111; border-color:var(--accent); font-weight:600}
-  button.danger{color:var(--rec)}
+  #sendBtn{height:46px; width:52px; font-size:1.2rem}
+  #sendBtn:disabled{opacity:.5}
   .small{font-size:.85rem; color:var(--muted)}
-  .linkbtn{background:none; border:none; color:var(--muted); text-decoration:underline; font-size:.85rem; cursor:pointer; margin-top:10px}
 
-  /* Filter + Liste */
-  .chips{display:flex; gap:8px; overflow-x:auto; padding-bottom:6px; margin-bottom:10px}
-  .chip{background:var(--card); border:1px solid var(--border); color:var(--text); border-radius:999px;
-    padding:6px 12px; font-size:.9rem; white-space:nowrap; cursor:pointer}
-  .chip.active{background:var(--accent); color:#111; border-color:var(--accent)}
-  .note{background:var(--card); border-radius:16px; padding:14px 16px; margin-bottom:10px; cursor:pointer;
-    border:1px solid transparent}
-  .note:active{border-color:var(--accent)}
-  .note .t{font-weight:600; display:flex; gap:8px; align-items:center}
-  .note .s{color:var(--muted); font-size:.9rem; margin-top:4px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
-  .note .m{color:var(--muted); font-size:.75rem; margin-top:6px}
-  .empty{text-align:center; color:var(--muted); padding:30px 10px}
-
-  /* Detail-Ansicht */
-  #detail{position:fixed; inset:0; background:var(--bg); overflow-y:auto; display:none; z-index:10;
-    padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
-  #detail.open{display:block}
-  #detail .inner{max-width:640px; margin:0 auto; padding:0 16px 60px}
-  #detail h2{margin:6px 0 4px; font-size:1.4rem}
-  .summary{color:var(--muted); border-left:3px solid var(--accent); padding-left:10px; margin:10px 0 16px}
-  .items{list-style:none; padding:0; margin:0 0 10px}
-  .items li{display:flex; align-items:center; gap:12px; padding:11px 4px; border-bottom:1px solid var(--border); cursor:pointer}
-  .items li .box{width:24px; height:24px; border-radius:7px; border:2px solid var(--muted); flex:none; display:grid; place-items:center; font-size:.9rem}
-  .items li.done .box{background:var(--ok); border-color:var(--ok); color:#fff}
-  .items li.done .txt{text-decoration:line-through; color:var(--muted)}
-  .items li .del{margin-left:auto; background:none; border:none; color:var(--muted); font-size:1.1rem; cursor:pointer}
-  .content h3,.content h4{margin:18px 0 6px}
-  .content ul{padding-left:20px; margin:6px 0}
-  .content p{margin:8px 0; line-height:1.45}
-  .tags{display:flex; flex-wrap:wrap; gap:6px; margin:14px 0}
-  .tag{background:var(--card2); border-radius:999px; padding:3px 10px; font-size:.8rem; color:var(--muted)}
-  details{background:var(--card); border-radius:12px; padding:10px 14px; margin:14px 0}
-  details summary{cursor:pointer; color:var(--muted)}
-  details p{font-size:.9rem; line-height:1.4}
-  .actions{display:flex; flex-wrap:wrap; gap:8px; margin-top:18px}
-
-  /* Einstellungen */
   dialog{background:var(--card); color:var(--text); border:none; border-radius:18px; padding:20px; width:min(92vw,480px)}
   dialog::backdrop{background:rgba(0,0,0,.55)}
   dialog label{display:block; margin:14px 0 6px; font-weight:600}
   dialog a{color:var(--accent)}
-
-  #toast{position:fixed; left:50%; bottom:calc(24px + env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(120px);
-    background:#111827; color:#fff; padding:12px 18px; border-radius:14px; max-width:90vw; transition:transform .25s; z-index:50; text-align:center}
-  #toast.show{transform:translateX(-50%) translateY(0)}
-  .spinner{display:inline-block; width:16px; height:16px; border:2px solid var(--muted); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; vertical-align:-3px; margin-right:6px}
-  @keyframes spin{to{transform:rotate(360deg)}}
+  .actions{display:flex; flex-wrap:wrap; gap:8px; margin-top:18px}
+  #testOut{margin-top:8px; min-height:1.2em}
 </style>
 </head>
 <body>
 
 <header>
-  <h1>⚡ Gedankenblitz</h1>
-  <button class="iconbtn" id="settingsBtn" aria-label="Einstellungen">⚙️</button>
+  <div>
+    <h1>⚡ Gedankenblitz</h1>
+    <div class="sub">Schreib etwas – du bekommst es auf Englisch zurück.</div>
+  </div>
+  <div>
+    <button class="iconbtn" id="clearBtn" aria-label="Verlauf löschen" title="Verlauf löschen">🗑️</button>
+    <button class="iconbtn" id="settingsBtn" aria-label="Einstellungen" title="Einstellungen">⚙️</button>
+  </div>
 </header>
 
-<main>
-  <section class="recorder">
-    <button id="recBtn" aria-label="Aufnahme starten">🎙️</button>
-    <div class="meter" id="meter"><div id="meterBar"></div></div>
-    <div id="status">Tippen, Gedanken einsprechen, nochmal tippen.</div>
-    <div class="small" id="keyHint" style="display:none;margin-top:4px">Am Laptop: <b>Leertaste</b> startet/stoppt die Aufnahme.</div>
-    <div class="typerow">
-      <input id="textIn" placeholder="…oder kurz eintippen" enterkeyhint="send">
-      <button class="btn primary" id="textBtn">➤</button>
-    </div>
-    <button class="linkbtn" id="fileBtn">Vorhandene Sprachmemo hochladen</button>
-    <input type="file" id="fileIn" accept="audio/*" hidden>
-  </section>
+<main id="chat"><div class="wrap" id="list"></div></main>
 
-  <div class="chips" id="chips"></div>
-  <div id="list"></div>
-</main>
-
-<!-- Detail-Ansicht einer Notiz -->
-<div id="detail">
-  <div class="inner">
-    <header style="padding:14px 0">
-      <button class="iconbtn" id="backBtn" aria-label="Zurück">←</button>
-      <span class="small" id="dType"></span>
-    </header>
-    <h2 id="dTitle"></h2>
-    <div class="small" id="dMeta"></div>
-    <div class="summary" id="dSummary"></div>
-    <div id="dItemsWrap">
-      <ul class="items" id="dItems"></ul>
-      <div class="typerow">
-        <input id="addItemIn" placeholder="Eintrag hinzufügen" enterkeyhint="done">
-        <button class="btn" id="addItemBtn">+</button>
-      </div>
-      <button class="linkbtn" id="clearDoneBtn">Erledigte entfernen</button>
-    </div>
-    <div class="content" id="dContent"></div>
-    <div class="tags" id="dTags"></div>
-    <details><summary>Originalaufnahmen (Transkripte)</summary><div id="dEntries"></div></details>
-    <div class="actions">
-      <button class="btn" id="shareBtn">📤 Teilen</button>
-      <button class="btn" id="dlBtn">💾 Als Datei (.md)</button>
-      <button class="btn danger" id="delBtn">🗑️ Löschen</button>
-    </div>
+<form id="form">
+  <div class="row">
+    <textarea id="input" rows="1" placeholder="Nachricht eingeben …" enterkeyhint="send"></textarea>
+    <button class="btn primary" id="sendBtn" type="submit" aria-label="Senden">➤</button>
   </div>
-</div>
+</form>
 
-<!-- Einstellungen -->
 <dialog id="settings">
   <h3 style="margin-top:0">Einstellungen</h3>
   <label for="keyIn">Gemini API-Schlüssel</label>
-  <input id="keyIn" type="password" autocomplete="off" placeholder="AQ.…">
+  <input id="keyIn" type="password" autocomplete="off" placeholder="AIza… oder AQ.…">
   <div class="small" style="margin-top:6px">Kostenlos erstellen unter
     <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.
-    Der Schlüssel bleibt nur auf diesem Gerät gespeichert.</div>
+    Der Schlüssel bleibt nur auf diesem Gerät.</div>
   <label for="modelIn">KI-Modell</label>
-  <input id="modelIn" list="models" placeholder="gemini-flash-latest">
-  <datalist id="models">
-    <option value="gemini-flash-latest"><option value="gemini-flash-lite-latest"><option value="gemini-2.5-flash">
-  </datalist>
-  <label for="micSel">Mikrofon</label>
-  <div class="typerow" style="margin-top:0">
-    <select id="micSel" style="flex:1;background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:12px;padding:11px 12px;font-size:1rem"></select>
-    <button class="btn" id="micTestBtn">Testen</button>
-  </div>
-  <div class="meter" id="testMeter" style="max-width:none"><div id="testMeterBar"></div></div>
-  <div class="small" id="micHint" style="margin-top:6px"></div>
-  <label>Sicherung</label>
-  <div class="actions" style="margin-top:0">
-    <button class="btn" id="exportAllBtn">Alle als .md</button>
-    <button class="btn" id="backupBtn">Backup (.json)</button>
-    <button class="btn" id="restoreBtn">Backup laden</button>
-    <input type="file" id="restoreIn" accept="application/json,.json" hidden>
-  </div>
+  <select id="modelIn">
+    <option value="gemini-2.5-flash">gemini-2.5-flash (empfohlen)</option>
+    <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite (schneller)</option>
+    <option value="gemini-flash-latest">gemini-flash-latest</option>
+    <option value="gemini-flash-lite-latest">gemini-flash-lite-latest</option>
+  </select>
   <div class="actions">
-    <button class="btn primary" id="saveSettingsBtn">Speichern</button>
-    <button class="btn" id="closeSettingsBtn">Schließen</button>
+    <button class="btn" id="testBtn" type="button">Verbindung testen</button>
+  </div>
+  <div class="small" id="testOut"></div>
+  <div class="actions">
+    <button class="btn primary" id="saveBtn" type="button">Speichern</button>
+    <button class="btn" id="closeBtn" type="button">Schließen</button>
   </div>
 </dialog>
 
-<div id="toast"></div>
-
 <script>
-/* =========================================================
-   Gedankenblitz – Sprachnotizen mit KI strukturieren
-   Alles läuft im Browser; Daten liegen im localStorage.
-   ========================================================= */
+/* Gedankenblitz – Chat, der jede Nachricht ins Englische übersetzt (Google Gemini).
+   Alles läuft im Browser; Verlauf und Schlüssel liegen im localStorage. */
 
-const MAX_SEKUNDEN = 120;          // maximale Aufnahmelänge
-const DEFAULT_MODEL = 'gemini-flash-latest';
-
-const TYPES = {
-  einkauf: { label: 'Einkaufsliste', icon: '🛒', itemsLabel: 'Einkaufsliste' },
-  aufgabe: { label: 'Aufgaben',      icon: '✅', itemsLabel: 'Aufgaben' },
-  idee:    { label: 'Idee',          icon: '💡', itemsLabel: 'Nächste Schritte' },
-  notiz:   { label: 'Notiz',         icon: '📝', itemsLabel: 'Punkte' },
-};
-
+const DEFAULT_MODEL = 'gemini-2.5-flash';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-const fmtDate = t => new Date(t).toLocaleString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
-const norm = s => s.toLowerCase().replace(/\s+/g, ' ').trim();
 
-/* ---------- Speicher ---------- */
-let notes = loadNotes();
-let filter = 'alle';
-let openId = null;
+const store = {
+  get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+const getKey   = () => store.get('gb_key', '').trim();
+const getModel = () => store.get('gb_chat_model', DEFAULT_MODEL);
 
-function loadNotes() {
-  try { return JSON.parse(localStorage.getItem('gb_notes') || '[]'); } catch { return []; }
-}
-function saveNotes() { localStorage.setItem('gb_notes', JSON.stringify(notes)); }
-const getKey   = () => localStorage.getItem('gb_key') || '';
-const getModel = () => localStorage.getItem('gb_model') || DEFAULT_MODEL;
+let messages = [];
+try { messages = JSON.parse(store.get('gb_chat', '[]')) || []; } catch { messages = []; }
+const save = () => store.set('gb_chat', JSON.stringify(messages.slice(-200)));
 
-/* ---------- UI-Helfer ---------- */
-let toastTimer;
-function toast(msg, ms = 3200) {
-  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms);
-}
-function setStatus(html) { $('#status').innerHTML = html; }
-function setBusy(b) {
-  $('#recBtn').disabled = b; $('#textBtn').disabled = b;
-  if (b) setStatus('<span class="spinner"></span>KI hört zu und sortiert…');
-}
-
-/* ---------- Liste ---------- */
-function renderChips() {
-  const counts = { alle: notes.length };
-  notes.forEach(n => counts[n.type] = (counts[n.type] || 0) + 1);
-  const all = [['alle', 'Alle'], ...Object.entries(TYPES).map(([k, v]) => [k, v.icon + ' ' + v.label])];
-  $('#chips').innerHTML = all.filter(([k]) => k === 'alle' || counts[k])
-    .map(([k, l]) => `<button class="chip ${filter === k ? 'active' : ''}" data-f="${k}">${l} (${counts[k] || 0})</button>`).join('');
-}
-function renderList() {
-  renderChips();
-  const list = notes.filter(n => filter === 'alle' || n.type === filter)
-                    .sort((a, b) => b.updated - a.updated);
-  if (!list.length) {
-    $('#list').innerHTML = '<div class="empty">Noch nichts gespeichert.<br>Sprich einfach deinen ersten Gedanken ein.</div>';
+/* ---------- Anzeige ---------- */
+function render(pending = false) {
+  const list = $('#list');
+  if (!messages.length && !pending) {
+    list.innerHTML = `<div class="empty">Schreib unten etwas auf Deutsch (oder in einer anderen Sprache).<br>
+      Die KI antwortet mit der englischen Übersetzung.${getKey() ? '' : '<br><br>Zuerst unter ⚙️ den Gemini-Schlüssel eintragen.'}</div>`;
     return;
   }
-  $('#list').innerHTML = list.map(n => {
-    const open = n.items.filter(i => !i.done).length;
-    const sub = n.type === 'einkauf' || n.type === 'aufgabe'
-      ? (n.items.filter(i => !i.done).map(i => i.text).join(', ') || 'Alles erledigt 🎉')
-      : n.summary;
-    return `<div class="note" data-id="${n.id}">
-      <div class="t">${TYPES[n.type]?.icon || '📝'} ${esc(n.title)}${n.items.length ? ` <span class="small">· ${open} offen</span>` : ''}</div>
-      <div class="s">${esc(sub)}</div>
-      <div class="m">aktualisiert ${fmtDate(n.updated)}</div></div>`;
-  }).join('');
+  list.innerHTML = messages.map((m, i) => {
+    if (m.role === 'me') return `<div class="msg me">${esc(m.text)}</div>`;
+    if (m.role === 'err') return `<div class="msg err">⚠️ ${esc(m.text)}</div>`;
+    return `<div class="msg ai"><span class="lang">English</span>${esc(m.text)}
+      <div class="tools"><button data-copy="${i}">Kopieren</button><button data-speak="${i}">🔊 Vorlesen</button></div></div>`;
+  }).join('') + (pending ? '<div class="msg ai"><span class="typing"><i></i><i></i><i></i></span></div>' : '');
+  const chat = $('#chat'); chat.scrollTop = chat.scrollHeight;
 }
 
-/* ---------- Mini-Markdown-Renderer ---------- */
-function md(src) {
-  const lines = esc(src || '').split('\n');
-  let html = '', inList = false;
-  const inline = s => s.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(^|\W)\*(.+?)\*(?=\W|$)/g, '$1<i>$2</i>');
-  for (const raw of lines) {
-    const l = raw.trim();
-    const li = l.match(/^([-*•]|\d+\.)\s+(.*)/);
-    if (li) { if (!inList) { html += '<ul>'; inList = true; } html += `<li>${inline(li[2])}</li>`; continue; }
-    if (inList) { html += '</ul>'; inList = false; }
-    if (!l) continue;
-    const h = l.match(/^(#{1,6})\s+(.*)/);
-    if (h) html += h[1].length <= 2 ? `<h3>${inline(h[2])}</h3>` : `<h4>${inline(h[2])}</h4>`;
-    else html += `<p>${inline(l)}</p>`;
+$('#list').addEventListener('click', async e => {
+  const c = e.target.dataset.copy, s = e.target.dataset.speak;
+  if (c != null) {
+    try { await navigator.clipboard.writeText(messages[c].text); e.target.textContent = 'Kopiert ✓'; }
+    catch { e.target.textContent = 'Nicht möglich'; }
+    setTimeout(() => (e.target.textContent = 'Kopieren'), 1500);
   }
-  return html + (inList ? '</ul>' : '');
-}
-
-/* ---------- Detail ---------- */
-function openNote(id) {
-  openId = id; renderDetail(); $('#detail').classList.add('open'); $('#detail').scrollTop = 0;
-}
-function closeNote() { openId = null; $('#detail').classList.remove('open'); renderList(); }
-function renderDetail() {
-  const n = notes.find(x => x.id === openId); if (!n) return closeNote();
-  const T = TYPES[n.type] || TYPES.notiz;
-  $('#dType').textContent = T.icon + ' ' + T.label;
-  $('#dTitle').textContent = n.title;
-  $('#dMeta').textContent = `erstellt ${fmtDate(n.created)} · aktualisiert ${fmtDate(n.updated)}`;
-  $('#dSummary').textContent = n.summary; $('#dSummary').style.display = n.summary ? '' : 'none';
-  $('#dItems').innerHTML = n.items.map((it, i) =>
-    `<li class="${it.done ? 'done' : ''}" data-i="${i}"><span class="box">${it.done ? '✓' : ''}</span><span class="txt">${esc(it.text)}</span><button class="del" data-del="${i}" aria-label="Entfernen">✕</button></li>`).join('');
-  $('#addItemIn').placeholder = T.itemsLabel + ': Eintrag hinzufügen';
-  $('#dContent').innerHTML = md(n.content);
-  $('#dTags').innerHTML = (n.tags || []).map(t => `<span class="tag">#${esc(t)}</span>`).join('');
-  $('#dEntries').innerHTML = n.entries.slice().reverse().map(e => `<p><b>${fmtDate(e.date)}</b><br>${esc(e.transcript)}</p>`).join('') || '<p>–</p>';
-}
-
-/* ---------- Notiz als Markdown-Datei ---------- */
-function toMarkdown(n) {
-  const T = TYPES[n.type] || TYPES.notiz;
-  let s = `# ${n.title}\n\n_${T.label} · erstellt ${fmtDate(n.created)} · aktualisiert ${fmtDate(n.updated)}_\n\n`;
-  if (n.summary) s += `> ${n.summary}\n\n`;
-  if (n.items.length) s += `## ${T.itemsLabel}\n` + n.items.map(i => `- [${i.done ? 'x' : ' '}] ${i.text}`).join('\n') + '\n\n';
-  if (n.content) s += n.content.trim() + '\n\n';
-  if (n.tags?.length) s += n.tags.map(t => '#' + t.replace(/\s+/g, '-')).join(' ') + '\n\n';
-  s += `## Originalaufnahmen\n` + n.entries.map(e => `- **${fmtDate(e.date)}:** ${e.transcript}`).join('\n') + '\n';
-  return s;
-}
-const fileName = n => (n.title || 'notiz').replace(/[^\wäöüÄÖÜß -]/g, '').trim().replace(/\s+/g, '-') + '.md';
-function download(name, text, type = 'text/markdown') {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name;
-  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-}
-async function shareNote(n) {
-  const text = toMarkdown(n);
-  try {
-    const file = new File([text], fileName(n), { type: 'text/markdown' });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) return await navigator.share({ files: [file], title: n.title });
-    if (navigator.share) return await navigator.share({ title: n.title, text });
-  } catch (e) { if (e.name === 'AbortError') return; }
-  download(fileName(n), text);
-}
-
-/* ---------- Aufnahme ---------- */
-let recorder = null, chunks = [], stream = null, startT = 0, timerInt = null;
-
-/* ---------- Mikrofon (Handy + Laptop) ---------- */
-const getMicId = () => localStorage.getItem('gb_mic') || '';
-
-async function getMicStream() {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    const e = new Error('nicht unterstützt'); e.name = window.isSecureContext ? 'NotSupportedError' : 'InsecureContext'; throw e;
+  if (s != null && 'speechSynthesis' in window) {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(messages[s].text); u.lang = 'en-US';
+    speechSynthesis.speak(u);
   }
-  const base = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
-  const id = getMicId();
-  try {
-    return await navigator.mediaDevices.getUserMedia({ audio: id ? { ...base, deviceId: { exact: id } } : base });
-  } catch (e) {
-    // gespeichertes Mikrofon nicht mehr da (z. B. Headset abgesteckt) -> Standardmikrofon
-    if (id && (e.name === 'OverconstrainedError' || e.name === 'NotFoundError')) {
-      localStorage.removeItem('gb_mic');
-      return await navigator.mediaDevices.getUserMedia({ audio: base });
-    }
-    throw e;
-  }
-}
-
-function micErrorText(e) {
-  const mac = /Mac/i.test(navigator.platform || navigator.userAgent);
-  switch (e.name) {
-    case 'InsecureContext':
-      return 'Das Mikrofon geht nur über https:// oder http://localhost. Öffne die App über deine GitHub-Pages-Adresse.';
-    case 'NotAllowedError': case 'SecurityError':
-      return 'Mikrofon blockiert. Klicke links neben der Adresse auf das Schloss/Regler-Symbol → Mikrofon „Zulassen“ und lade neu.' +
-        (mac ? ' Auf dem Mac zusätzlich: Systemeinstellungen → Datenschutz & Sicherheit → Mikrofon → deinen Browser einschalten.' : '');
-    case 'NotFoundError':
-      return 'Kein Mikrofon gefunden. Ist eins angeschlossen bzw. eingeschaltet?';
-    case 'NotReadableError': case 'AbortError':
-      return 'Das Mikrofon wird gerade von einem anderen Programm benutzt (z. B. Zoom/Teams). Schließe es und versuche es nochmal.';
-    case 'NotSupportedError':
-      return 'Dieser Browser kann nicht aufnehmen. Nimm Chrome, Edge, Firefox oder Safari in aktueller Version.';
-    default:
-      return 'Mikrofon-Fehler: ' + (e.message || e.name);
-  }
-}
-
-/* Pegelanzeige, damit man sieht, dass das Mikrofon etwas hört */
-let meterCtx = null, meterRaf = null;
-function startMeter(s, wrap, bar) {
-  try {
-    stopMeter();
-    const AC = window.AudioContext || window.webkitAudioContext;
-    meterCtx = new AC();
-    const an = meterCtx.createAnalyser(); an.fftSize = 512;
-    meterCtx.createMediaStreamSource(s).connect(an);
-    const buf = new Uint8Array(an.fftSize);
-    wrap.classList.add('on');
-    const loop = () => {
-      an.getByteTimeDomainData(buf);
-      let peak = 0; for (const v of buf) peak = Math.max(peak, Math.abs(v - 128));
-      bar.style.width = Math.min(100, peak / 128 * 180) + '%';
-      meterRaf = requestAnimationFrame(loop);
-    };
-    loop();
-  } catch (e) { console.warn('Pegelanzeige nicht möglich', e); }
-}
-function stopMeter(wrap) {
-  cancelAnimationFrame(meterRaf); meterRaf = null;
-  if (meterCtx) { meterCtx.close?.(); meterCtx = null; }
-  document.querySelectorAll('.meter').forEach(m => m.classList.remove('on'));
-}
-
-/* Liste der Mikrofone in den Einstellungen */
-async function fillMicList() {
-  const sel = $('#micSel'), hint = $('#micHint');
-  if (!navigator.mediaDevices?.enumerateDevices) { sel.innerHTML = '<option value="">Standard</option>'; return; }
-  let devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput');
-  const noNames = devs.length && devs.every(d => !d.label);
-  sel.innerHTML = '<option value="">Standard-Mikrofon</option>' + devs
-    .filter(d => d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications')
-    .map((d, i) => `<option value="${esc(d.deviceId)}">${esc(d.label || 'Mikrofon ' + (i + 1))}</option>`).join('');
-  sel.value = getMicId();
-  if (sel.value !== getMicId()) sel.value = '';
-  hint.textContent = noNames ? 'Tipp: Einmal „Testen“ drücken und Zugriff erlauben, dann erscheinen die Namen der Mikrofone.' : '';
-}
-
-let testStream = null, testTimer = null;
-async function testMic() {
-  if (testStream) return endMicTest();
-  localStorage.setItem('gb_mic', $('#micSel').value);
-  try { testStream = await getMicStream(); }
-  catch (e) { $('#micHint').textContent = micErrorText(e); return; }
-  await fillMicList();
-  $('#micTestBtn').textContent = 'Stopp';
-  $('#micHint').textContent = 'Sprich etwas – der grüne Balken sollte ausschlagen.';
-  startMeter(testStream, $('#testMeter'), $('#testMeterBar'));
-  testTimer = setTimeout(endMicTest, 10000);
-}
-function endMicTest() {
-  clearTimeout(testTimer);
-  if (testStream) testStream.getTracks().forEach(t => t.stop());
-  testStream = null; stopMeter(); $('#micTestBtn').textContent = 'Testen';
-}
-
-async function toggleRecording() {
-  if (recorder && recorder.state === 'recording') { recorder.stop(); return; }
-  if (!getKey()) { openSettings(); toast('Bitte zuerst den API-Schlüssel eintragen.'); return; }
-  if (!window.MediaRecorder) { toast('Dein Browser kann nicht aufnehmen – nutze „Sprachmemo hochladen“.'); return; }
-  try { stream = await getMicStream(); }
-  catch (e) { toast(micErrorText(e), 8000); setStatus(esc(micErrorText(e))); return; }
-  startMeter(stream, $('#meter'), $('#meterBar'));
-
-  const mime = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm', 'audio/ogg'].find(m => MediaRecorder.isTypeSupported(m)) || '';
-  recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
-  chunks = [];
-  recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-  recorder.onstop = async () => {
-    stream.getTracks().forEach(t => t.stop()); stopMeter($('#meter'));
-    clearInterval(timerInt);
-    $('#recBtn').classList.remove('recording'); $('#recBtn').textContent = '🎙️';
-    const dauer = Date.now() - startT;
-    const blob = new Blob(chunks, { type: recorder.mimeType || mime || 'audio/webm' });
-    if (dauer < 800 || !blob.size) { setStatus('Aufnahme war zu kurz.'); return; }
-    await processAudio(blob);
-  };
-  recorder.start(250);
-  startT = Date.now();
-  $('#recBtn').classList.add('recording'); $('#recBtn').textContent = '⏹';
-  const tick = () => {
-    const s = Math.floor((Date.now() - startT) / 1000);
-    setStatus(`Aufnahme läuft <span id="timer">${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}</span> – tippen zum Beenden`);
-    if (s >= MAX_SEKUNDEN && recorder.state === 'recording') recorder.stop();
-  };
-  tick(); timerInt = setInterval(tick, 250);
-}
-
-/* Audio in kompaktes WAV (16 kHz, mono) umwandeln – funktioniert mit
-   allen Formaten, die das Handy aufnimmt (webm auf Android, mp4 auf iPhone). */
-async function toWav(blob) {
-  const AC = window.AudioContext || window.webkitAudioContext;
-  const ctx = new AC();
-  const buf = await blob.arrayBuffer();
-  const audio = await new Promise((res, rej) => ctx.decodeAudioData(buf, res, rej));
-  ctx.close?.();
-  const rate = 16000;
-  const off = new OfflineAudioContext(1, Math.max(1, Math.ceil(audio.duration * rate)), rate);
-  const src = off.createBufferSource(); src.buffer = audio; src.connect(off.destination); src.start();
-  const data = (await off.startRendering()).getChannelData(0);
-  const dv = new DataView(new ArrayBuffer(44 + data.length * 2));
-  const w = (o, s) => [...s].forEach((c, i) => dv.setUint8(o + i, c.charCodeAt(0)));
-  w(0, 'RIFF'); dv.setUint32(4, 36 + data.length * 2, true); w(8, 'WAVE'); w(12, 'fmt ');
-  dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
-  dv.setUint32(24, rate, true); dv.setUint32(28, rate * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
-  w(36, 'data'); dv.setUint32(40, data.length * 2, true);
-  for (let i = 0; i < data.length; i++) {
-    const v = Math.max(-1, Math.min(1, data[i]));
-    dv.setInt16(44 + i * 2, v < 0 ? v * 0x8000 : v * 0x7fff, true);
-  }
-  return new Blob([dv], { type: 'audio/wav' });
-}
-const toBase64 = blob => new Promise((res, rej) => {
-  const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(blob);
 });
 
-async function processAudio(blob) {
-  setBusy(true);
-  try {
-    let audio = blob;
-    try { audio = await toWav(blob); } catch (e) { console.warn('WAV-Umwandlung fehlgeschlagen, sende Original', e); }
-    const data = await toBase64(audio);
-    const result = await askAI({ inlineData: { mimeType: audio.type.split(';')[0] || 'audio/wav', data } });
-    applyResult(result);
-  } catch (e) { handleError(e); }
-  finally { setBusy(false); }
-}
-async function processText(text) {
-  if (!text.trim()) return;
-  if (!getKey()) { openSettings(); toast('Bitte zuerst den API-Schlüssel eintragen.'); return; }
-  setBusy(true);
-  try { applyResult(await askAI({ text: 'Eingetippter Gedanke (statt Aufnahme): ' + text })); $('#textIn').value = ''; }
-  catch (e) { handleError(e); }
-  finally { setBusy(false); }
-}
-function handleError(e) {
-  console.error(e);
-  setStatus('Das hat nicht geklappt.');
-  toast(e.message || String(e), 6000);
-}
+/* ---------- KI ---------- */
+const SYSTEM_PROMPT = `You are a translator inside a chat app.
+Translate the user's message into natural, fluent English.
+- Output ONLY the English translation, no explanations, no quotes, no notes.
+- Keep the meaning, tone, line breaks and emojis.
+- If the message is already English, return it with spelling and grammar corrected.`;
 
-/* ---------- KI (Google Gemini) ---------- */
-const SYSTEM_PROMPT = `Du bist der Assistent einer App, in der man spontane Gedanken per Sprachaufnahme festhält.
-Die Aufnahme ist meist auf Deutsch. Antworte immer auf Deutsch und nur im vorgegebenen JSON-Format.
-
-Vorgehen:
-1. "transcript": Schreibe auf, was gesagt wurde (Füllwörter wie "ähm" weglassen, sonst wortgetreu).
-2. Zerlege den Gedanken in einen oder mehrere Einträge ("eintraege"). Mehrere nur, wenn klar verschiedene Themen vorkommen
-   (z. B. "Ich brauche noch Milch, und ich hatte eine Idee für ein Geburtstagsgeschenk" = 2 Einträge).
-3. "type" pro Eintrag:
-   - "einkauf": Dinge, die man kaufen/besorgen will (Lebensmittel, Drogerie, Haushalt …)
-   - "aufgabe": To-dos und Erledigungen (anrufen, Termin machen, Rechnung bezahlen …)
-   - "idee": Ideen, Projekte, Pläne, Überlegungen
-   - "notiz": alles andere
-4. "action": "erweitern" + "target_id", wenn eine der vorhandenen Notizen eindeutig dasselbe Thema hat; sonst "neu" und target_id leer.
-   Bei type "einkauf" IMMER die vorhandene Einkaufsliste erweitern, falls es eine gibt.
-5. Strukturierung:
-   - "title": kurz und treffend (max. 6 Wörter)
-   - "summary": 1–2 Sätze, worum es geht
-   - "content_markdown": bei idee/notiz eine geordnete Zusammenfassung mit Zwischenüberschriften (###) und Stichpunkten
-     (z. B. ### Kern der Idee, ### Details, ### Offene Fragen). Bei einkauf leer, bei aufgabe nur falls nötig.
-     Beim Erweitern nur den NEUEN Inhalt schreiben.
-   - "items": bei einkauf die einzelnen Artikel, Mengen übernehmen ("2 l Milch", "Brot"), Anfangsbuchstabe groß;
-     bei aufgabe die einzelnen To-dos; bei idee konkrete nächste Schritte, falls genannt; sonst leer.
-   - "tags": 1–4 kurze Schlagwörter, klein geschrieben.
-6. Erfinde nichts, was nicht gesagt wurde. Ist die Aufnahme leer oder unverständlich, gib "eintraege" als leere Liste zurück.`;
-
-const SCHEMA = {
-  type: 'OBJECT',
-  properties: {
-    transcript: { type: 'STRING' },
-    eintraege: {
-      type: 'ARRAY',
-      items: {
-        type: 'OBJECT',
-        properties: {
-          action: { type: 'STRING', enum: ['neu', 'erweitern'] },
-          target_id: { type: 'STRING' },
-          type: { type: 'STRING', enum: ['einkauf', 'aufgabe', 'idee', 'notiz'] },
-          title: { type: 'STRING' },
-          summary: { type: 'STRING' },
-          content_markdown: { type: 'STRING' },
-          items: { type: 'ARRAY', items: { type: 'STRING' } },
-          tags: { type: 'ARRAY', items: { type: 'STRING' } },
-        },
-        required: ['action', 'type', 'title', 'summary', 'items'],
-      },
-    },
-  },
-  required: ['transcript', 'eintraege'],
-};
-
-function notesOverview() {
-  if (!notes.length) return 'Es gibt noch keine Notizen.';
-  return notes.slice().sort((a, b) => b.updated - a.updated).slice(0, 40).map(n =>
-    `- id=${n.id} | typ=${n.type} | titel="${n.title}" | tags=${(n.tags || []).join(', ')} | ${(n.summary || '').slice(0, 160)}` +
-    (n.type === 'einkauf' ? ` | enthält: ${n.items.filter(i => !i.done).map(i => i.text).join(', ').slice(0, 300)}` : '')
-  ).join('\n');
-}
-
-async function askAI(part) {
+async function translate(text, model = getModel()) {
+  const key = getKey();
+  if (!key) throw new Error('Kein API-Schlüssel eingetragen. Bitte unter ⚙️ eintragen.');
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   const body = {
     systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-    contents: [{ role: 'user', parts: [
-      { text: `Heute ist ${new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}.\n\nVorhandene Notizen:\n${notesOverview()}\n\nHier ist der neue Gedanke:` },
-      part,
-    ] }],
-    generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA, temperature: 0.3 },
+    contents: [{ role: 'user', parts: [{ text }] }],
+    generationConfig: { temperature: 0.2 },
   };
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(getModel())}:generateContent`;
   let res;
-  try { res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': getKey() }, body: JSON.stringify(body) }); }
-  catch { throw new Error('Keine Verbindung zur KI. Bist du online?'); }
+  try {
+    res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify(body) });
+  } catch { throw new Error('Keine Verbindung zur KI. Bist du online?'); }
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const msg = json.error?.message || res.statusText;
-    if (res.status === 429) throw new Error('Kostenloses Limit kurz erreicht – bitte eine Minute warten.');
-    if (res.status === 401 || res.status === 403 || (res.status === 400 && /API key/i.test(msg)))
-      throw new Error('API-Schlüssel wird nicht akzeptiert. Bitte in ⚙️ prüfen (komplett kopiert, ohne Leerzeichen?). Details: ' + msg);
-    if (res.status === 404) throw new Error(`Modell „${getModel()}“ nicht gefunden. Bitte in den Einstellungen ein anderes wählen.`);
-    throw new Error('KI-Fehler: ' + msg);
+    const msg = json.error?.message || res.statusText || 'unbekannt';
+    if (res.status === 429) throw new Error('Kostenloses Limit erreicht – bitte kurz warten. (' + msg + ')');
+    if (res.status === 401 || res.status === 403 || /API key/i.test(msg))
+      throw new Error('API-Schlüssel wird nicht akzeptiert. Bitte unter ⚙️ prüfen. (' + msg + ')');
+    if (res.status === 404) throw new Error(`Modell „${model}“ nicht gefunden – bitte unter ⚙️ ein anderes wählen.`);
+    throw new Error(`KI-Fehler ${res.status}: ${msg}`);
   }
-  const text = (json.candidates?.[0]?.content?.parts || []).filter(p => !p.thought).map(p => p.text || '').join('');
-  try { return JSON.parse(text); } catch { throw new Error('Die KI-Antwort war nicht lesbar. Bitte nochmal versuchen.'); }
+  const cand = json.candidates?.[0];
+  const out = (cand?.content?.parts || []).filter(p => !p.thought).map(p => p.text || '').join('').trim();
+  if (!out) throw new Error('Leere Antwort von der KI' + (cand?.finishReason ? ` (${cand.finishReason})` : json.promptFeedback?.blockReason ? ` (${json.promptFeedback.blockReason})` : '') + '.');
+  return out;
 }
 
-/* ---------- Ergebnis in Notizen einsortieren ---------- */
-function addItems(note, items) {
-  let count = 0;
-  for (const raw of items || []) {
-    const text = String(raw).trim(); if (!text) continue;
-    const found = note.items.find(i => norm(i.text) === norm(text));
-    if (found) { if (found.done) { found.done = false; count++; } }   // wieder auf die Liste
-    else { note.items.push({ text, done: false }); count++; }
+/* ---------- Senden ---------- */
+const input = $('#input');
+function autosize() { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, innerHeight * 0.4) + 'px'; }
+input.addEventListener('input', autosize);
+input.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && matchMedia('(pointer:fine)').matches) {
+    e.preventDefault(); $('#form').requestSubmit();
   }
-  return count;
-}
-const latestOfType = t => notes.filter(n => n.type === t).sort((a, b) => b.updated - a.updated)[0];
+});
 
-function applyEntry(e, transcript) {
-  const now = Date.now();
-  const type = TYPES[e.type] ? e.type : 'notiz';
-  let target = null;
-  if (type === 'einkauf') target = notes.find(n => n.id === e.target_id && n.type === 'einkauf') || latestOfType('einkauf');
-  else if (e.action === 'erweitern') target = notes.find(n => n.id === e.target_id);
+$('#form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const text = input.value.trim();
+  if (!text) return;
+  if (!getKey()) { openSettings(); return; }
+  messages.push({ role: 'me', text }); save();
+  input.value = ''; autosize();
+  $('#sendBtn').disabled = true; render(true);
+  try { messages.push({ role: 'ai', text: await translate(text) }); }
+  catch (err) { console.error(err); messages.push({ role: 'err', text: err.message || String(err) }); }
+  save(); $('#sendBtn').disabled = false; render(); input.focus();
+});
 
-  if (target) {
-    const added = addItems(target, e.items);
-    if (e.content_markdown?.trim()) target.content = (target.content || '').trim() + `\n\n### Ergänzung vom ${fmtDate(now)}\n${e.content_markdown.trim()}`;
-    target.tags = [...new Set([...(target.tags || []), ...(e.tags || [])])];
-    target.entries.push({ date: now, transcript });
-    target.updated = now;
-    return { note: target, msg: type === 'einkauf' ? `🛒 ${added} Artikel zur Einkaufsliste hinzugefügt` : `✏️ „${target.title}“ ergänzt` };
-  }
-  const n = {
-    id: uid(), type,
-    title: type === 'einkauf' ? 'Einkaufsliste' : (e.title || TYPES[type].label),
-    summary: type === 'einkauf' ? '' : (e.summary || ''),
-    content: e.content_markdown || '', items: [], tags: e.tags || [],
-    created: now, updated: now, entries: [{ date: now, transcript }],
-  };
-  addItems(n, e.items);
-  notes.push(n);
-  return { note: n, msg: `${TYPES[type].icon} Neu angelegt: „${n.title}“` };
-}
+$('#clearBtn').addEventListener('click', () => {
+  if (messages.length && confirm('Ganzen Verlauf löschen?')) { messages = []; save(); render(); }
+});
 
-function applyResult(r) {
-  const entries = r?.eintraege || [];
-  if (!entries.length) { setStatus('Ich konnte nichts verstehen – nochmal probieren?'); return; }
-  const done = entries.map(e => applyEntry(e, r.transcript || ''));
-  saveNotes(); renderList();
-  setStatus(done.map(d => esc(d.msg)).join('<br>'));
-  toast(done.map(d => d.msg).join(' · '));
-  if (navigator.vibrate) navigator.vibrate(40);
-}
-
-/* ---------- Einstellungen & Backup ---------- */
+/* ---------- Einstellungen ---------- */
 function openSettings() {
-  $('#keyIn').value = getKey(); $('#modelIn').value = getModel();
-  fillMicList();
+  $('#keyIn').value = getKey(); $('#modelIn').value = getModel(); $('#testOut').textContent = '';
   $('#settings').showModal();
 }
-
-/* ---------- Events ---------- */
-$('#recBtn').onclick = toggleRecording;
-$('#textBtn').onclick = () => processText($('#textIn').value);
-$('#textIn').onkeydown = e => { if (e.key === 'Enter') processText($('#textIn').value); };
-$('#fileBtn').onclick = () => { if (!getKey()) { openSettings(); return; } $('#fileIn').click(); };
-$('#fileIn').onchange = e => { const f = e.target.files[0]; if (f) processAudio(f); e.target.value = ''; };
-
-$('#chips').onclick = e => { const f = e.target.closest('[data-f]'); if (f) { filter = f.dataset.f; renderList(); } };
-$('#list').onclick = e => { const n = e.target.closest('[data-id]'); if (n) openNote(n.dataset.id); };
-$('#backBtn').onclick = closeNote;
-
-$('#dItems').onclick = e => {
-  const n = notes.find(x => x.id === openId); if (!n) return;
-  const del = e.target.closest('[data-del]');
-  if (del) { n.items.splice(+del.dataset.del, 1); }
-  else { const li = e.target.closest('[data-i]'); if (!li) return; const it = n.items[+li.dataset.i]; it.done = !it.done; }
-  n.updated = Date.now(); saveNotes(); renderDetail();
-};
-const addManual = () => {
-  const n = notes.find(x => x.id === openId); const v = $('#addItemIn').value.trim(); if (!n || !v) return;
-  addItems(n, [v]); n.updated = Date.now(); saveNotes(); $('#addItemIn').value = ''; renderDetail();
-};
-$('#addItemBtn').onclick = addManual;
-$('#addItemIn').onkeydown = e => { if (e.key === 'Enter') addManual(); };
-$('#clearDoneBtn').onclick = () => {
-  const n = notes.find(x => x.id === openId); if (!n) return;
-  n.items = n.items.filter(i => !i.done); n.updated = Date.now(); saveNotes(); renderDetail();
-};
-$('#shareBtn').onclick = () => { const n = notes.find(x => x.id === openId); if (n) shareNote(n); };
-$('#dlBtn').onclick = () => { const n = notes.find(x => x.id === openId); if (n) download(fileName(n), toMarkdown(n)); };
-$('#delBtn').onclick = () => {
-  const n = notes.find(x => x.id === openId); if (!n) return;
-  if (confirm(`„${n.title}“ wirklich löschen?`)) { notes = notes.filter(x => x.id !== n.id); saveNotes(); closeNote(); }
-};
-
-$('#settingsBtn').onclick = openSettings;
-$('#closeSettingsBtn').onclick = () => $('#settings').close();
-$('#settings').addEventListener('close', endMicTest);
-$('#micTestBtn').onclick = testMic;
-$('#micSel').onchange = () => { localStorage.setItem('gb_mic', $('#micSel').value); if (testStream) { endMicTest(); testMic(); } };
-if (navigator.mediaDevices?.addEventListener) navigator.mediaDevices.addEventListener('devicechange', () => { if ($('#settings').open) fillMicList(); });
-
-// Leertaste = Aufnahme starten/stoppen (nur wenn man nicht gerade tippt)
-document.addEventListener('keydown', e => {
-  if (e.code !== 'Space' || e.repeat) return;
-  if (e.target.closest('input, textarea, select, button, dialog') || $('#detail').classList.contains('open')) return;
-  e.preventDefault(); if (!$('#recBtn').disabled) toggleRecording();
+$('#settingsBtn').addEventListener('click', openSettings);
+$('#closeBtn').addEventListener('click', () => $('#settings').close());
+$('#saveBtn').addEventListener('click', () => {
+  store.set('gb_key', $('#keyIn').value.trim());
+  store.set('gb_chat_model', $('#modelIn').value);
+  $('#settings').close(); render();
 });
-if (matchMedia('(hover: hover) and (pointer: fine)').matches) $('#keyHint').style.display = '';
-$('#saveSettingsBtn').onclick = () => {
-  localStorage.setItem('gb_key', $('#keyIn').value.trim());
-  localStorage.setItem('gb_model', $('#modelIn').value.trim() || DEFAULT_MODEL);
-  localStorage.setItem('gb_mic', $('#micSel').value);
-  $('#settings').close(); toast('Gespeichert ✔');
-};
-$('#exportAllBtn').onclick = () => {
-  if (!notes.length) return toast('Noch keine Notizen.');
-  download('gedanken-alle.md', notes.slice().sort((a, b) => b.updated - a.updated).map(toMarkdown).join('\n---\n\n'));
-};
-$('#backupBtn').onclick = () => download(`gedanken-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(notes, null, 2), 'application/json');
-$('#restoreBtn').onclick = () => $('#restoreIn').click();
-$('#restoreIn').onchange = async e => {
-  const f = e.target.files[0]; if (!f) return;
-  try {
-    const data = JSON.parse(await f.text()); if (!Array.isArray(data)) throw 0;
-    const ids = new Set(notes.map(n => n.id));
-    data.forEach(n => { if (n && n.id && !ids.has(n.id)) notes.push(n); });
-    saveNotes(); renderList(); toast('Backup geladen ✔');
-  } catch { toast('Diese Datei ist kein gültiges Backup.'); }
-  e.target.value = '';
-};
+$('#testBtn').addEventListener('click', async () => {
+  const out = $('#testOut'), old = getKey();
+  store.set('gb_key', $('#keyIn').value.trim());
+  out.textContent = 'Teste …';
+  try { out.textContent = '✅ Klappt: „Guten Morgen“ → „' + await translate('Guten Morgen', $('#modelIn').value) + '“'; }
+  catch (err) { out.textContent = '❌ ' + err.message; store.set('gb_key', old); }
+});
 
-/* ---------- Start ---------- */
-renderList();
-if (!getKey()) setStatus('Zuerst oben rechts ⚙️ den kostenlosen API-Schlüssel eintragen.');
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+render();
+if (!getKey()) openSettings();
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
 </body>
 </html>

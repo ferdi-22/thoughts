@@ -1,7 +1,7 @@
 {
   "name": "Gedankenblitz",
   "short_name": "Gedanken",
-  "description": "Spontane Gedanken einsprechen – die KI sortiert sie in Notizen und Listen.",
+  "description": "Chatten und alles direkt ins Englische übersetzen lassen.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
