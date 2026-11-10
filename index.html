@@ -155,7 +155,7 @@
 <dialog id="settings">
   <h3 style="margin-top:0">Einstellungen</h3>
   <label for="keyIn">Gemini API-Schlüssel</label>
-  <input id="keyIn" type="password" autocomplete="off" placeholder="AQ.…">
+  <input id="keyIn" type="password" autocomplete="off" placeholder="AIza…">
   <div class="small" style="margin-top:6px">Kostenlos erstellen unter
     <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.
     Der Schlüssel bleibt nur auf diesem Gerät gespeichert.</div>
@@ -473,16 +473,15 @@ async function askAI(part) {
     ] }],
     generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA, temperature: 0.3 },
   };
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(getModel())}:generateContent`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(getModel())}:generateContent?key=${encodeURIComponent(getKey())}`;
   let res;
-  try { res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': getKey() }, body: JSON.stringify(body) }); }
+  try { res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
   catch { throw new Error('Keine Verbindung zur KI. Bist du online?'); }
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = json.error?.message || res.statusText;
     if (res.status === 429) throw new Error('Kostenloses Limit kurz erreicht – bitte eine Minute warten.');
-    if (res.status === 401 || res.status === 403 || (res.status === 400 && /API key/i.test(msg)))
-      throw new Error('API-Schlüssel wird nicht akzeptiert. Bitte in ⚙️ prüfen (komplett kopiert, ohne Leerzeichen?). Details: ' + msg);
+    if (res.status === 400 && /API key/i.test(msg)) throw new Error('API-Schlüssel ungültig. Bitte in den Einstellungen prüfen.');
     if (res.status === 404) throw new Error(`Modell „${getModel()}“ nicht gefunden. Bitte in den Einstellungen ein anderes wählen.`);
     throw new Error('KI-Fehler: ' + msg);
   }
