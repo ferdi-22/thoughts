@@ -1,7 +1,7 @@
 {
   "name": "Gedankenblitz",
   "short_name": "Gedanken",
-  "description": "Chatten und alles direkt ins Englische übersetzen lassen.",
+  "description": "Englisch üben im Chat mit einem natürlichen Gesprächspartner.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

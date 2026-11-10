@@ -66,6 +66,13 @@
   dialog a{color:var(--accent)}
   .actions{display:flex; flex-wrap:wrap; gap:8px; margin-top:18px}
   #testOut{margin-top:8px; min-height:1.2em}
+  .fix{align-self:flex-end; max-width:85%; margin-top:-4px; font-size:.85rem; background:var(--card);
+    border:1px dashed var(--accent); border-radius:12px; padding:8px 12px; line-height:1.35}
+  .fix .why{color:var(--muted); margin-top:4px}
+  .msg .de{margin-top:8px; padding-top:8px; border-top:1px solid var(--border); color:var(--muted); font-size:.9rem}
+  .starters{display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:18px}
+  .starters button{background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:999px;
+    padding:8px 14px; font-size:.9rem; cursor:pointer}
 </style>
 </head>
 <body>
@@ -73,7 +80,7 @@
 <header>
   <div>
     <h1>⚡ Gedankenblitz</h1>
-    <div class="sub">Schreib etwas – du bekommst es auf Englisch zurück.</div>
+    <div class="sub">Englisch üben im Chat mit Sam</div>
   </div>
   <div>
     <button class="iconbtn" id="clearBtn" aria-label="Verlauf löschen" title="Verlauf löschen">🗑️</button>
@@ -97,6 +104,13 @@
   <div class="small" style="margin-top:6px">Kostenlos erstellen unter
     <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.
     Der Schlüssel bleibt nur auf diesem Gerät.</div>
+  <label for="levelIn">Dein Englisch-Niveau</label>
+  <select id="levelIn">
+    <option value="A2">Anfänger (A2) – einfache Sätze</option>
+    <option value="B1">Mittel (B1) – Alltagsenglisch</option>
+    <option value="B2">Gut (B2) – natürlich, mit Redewendungen</option>
+    <option value="C1">Sehr gut (C1) – wie mit Muttersprachlern</option>
+  </select>
   <label for="modelIn">KI-Modell</label>
   <select id="modelIn"></select>
   <div class="small" style="margin-top:6px">„Automatisch“ nimmt ein verfügbares Modell und weicht bei Überlastung auf ein anderes aus.</div>
@@ -111,7 +125,7 @@
 </dialog>
 
 <script>
-/* Gedankenblitz – Chat, der jede Nachricht ins Englische übersetzt (Google Gemini).
+/* Gedankenblitz – Englisch-Gesprächspartner zum Üben (Google Gemini).
    Alles läuft im Browser; Verlauf und Schlüssel liegen im localStorage. */
 
 const DEFAULT_MODEL = 'auto';
@@ -129,28 +143,36 @@ const getKey   = () => store.get('gb_key', '').trim();
 const getModel = () => store.get('gb_model_v2', DEFAULT_MODEL);
 
 let messages = [];
-try { messages = JSON.parse(store.get('gb_chat', '[]')) || []; } catch { messages = []; }
-const save = () => store.set('gb_chat', JSON.stringify(messages.slice(-200)));
+try { messages = JSON.parse(store.get('gb_talk', '[]')) || []; } catch { messages = []; }
+const save = () => store.set('gb_talk', JSON.stringify(messages.slice(-200)));
+
+const getLevel = () => store.get('gb_level', 'B1');
+const STARTERS = ['Hi! How are you today?', 'What did you do last weekend?', 'Can you recommend a good movie?', 'Ich möchte über meinen Job reden.'];
 
 /* ---------- Anzeige ---------- */
 function render(pending = false) {
   const list = $('#list');
   if (!messages.length && !pending) {
-    list.innerHTML = `<div class="empty">Schreib unten etwas auf Deutsch (oder in einer anderen Sprache).<br>
-      Die KI antwortet mit der englischen Übersetzung.${getKey() ? '' : '<br><br>Zuerst unter ⚙️ den Gemini-Schlüssel eintragen.'}</div>`;
+    list.innerHTML = `<div class="empty">👋 Chatte auf Englisch mit deinem Gesprächspartner <b>Sam</b>.<br>
+      Fehler werden dezent verbessert. Wenn dir ein Wort fehlt, schreib es einfach auf Deutsch.
+      ${getKey() ? '' : '<br><br>Zuerst unter ⚙️ den Gemini-Schlüssel eintragen.'}
+      <div class="starters">${STARTERS.map(s => `<button data-start="${esc(s)}">${esc(s)}</button>`).join('')}</div></div>`;
     return;
   }
   list.innerHTML = messages.map((m, i) => {
-    if (m.role === 'me') return `<div class="msg me">${esc(m.text)}</div>`;
+    if (m.role === 'me') return `<div class="msg me">${esc(m.text)}</div>` + (m.fix ? `<div class="fix">
+      <b>✏️ Besser:</b> ${esc(m.fix)}${m.why ? `<div class="why">${esc(m.why)}</div>` : ''}</div>` : '');
     if (m.role === 'err') return `<div class="msg err">⚠️ ${esc(m.text)}</div>`;
-    return `<div class="msg ai"><span class="lang">English</span>${esc(m.text)}
-      <div class="tools"><button data-copy="${i}">Kopieren</button><button data-speak="${i}">🔊 Vorlesen</button></div></div>`;
+    return `<div class="msg ai">${esc(m.text)}${m.de ? `<div class="de" id="de${i}" hidden>🇩🇪 ${esc(m.de)}</div>` : ''}
+      <div class="tools"><button data-speak="${i}">🔊</button>${m.de ? `<button data-de="${i}">🇩🇪 Deutsch</button>` : ''}<button data-copy="${i}">Kopieren</button></div></div>`;
   }).join('') + (pending ? '<div class="msg ai"><span class="typing"><i></i><i></i><i></i></span></div>' : '');
   const chat = $('#chat'); chat.scrollTop = chat.scrollHeight;
 }
 
 $('#list').addEventListener('click', async e => {
-  const c = e.target.dataset.copy, s = e.target.dataset.speak;
+  const { copy: c, speak: s, de, start } = e.target.dataset;
+  if (start) { input.value = start; autosize(); $('#form').requestSubmit(); }
+  if (de != null) { const d = $('#de' + de); d.hidden = !d.hidden; }
   if (c != null) {
     try { await navigator.clipboard.writeText(messages[c].text); e.target.textContent = 'Kopiert ✓'; }
     catch { e.target.textContent = 'Nicht möglich'; }
@@ -164,11 +186,45 @@ $('#list').addEventListener('click', async e => {
 });
 
 /* ---------- KI ---------- */
-const SYSTEM_PROMPT = `You are a translator inside a chat app.
-Translate the user's message into natural, fluent English.
-- Output ONLY the English translation, no explanations, no quotes, no notes.
-- Keep the meaning, tone, line breaks and emojis.
-- If the message is already English, return it with spelling and grammar corrected.`;
+const LEVELS = {
+  A2: 'a beginner (CEFR A2): use very simple words and short sentences',
+  B1: 'an intermediate learner (CEFR B1): use everyday language, avoid rare idioms',
+  B2: 'an upper-intermediate learner (CEFR B2): speak naturally, occasional idioms are fine',
+  C1: 'an advanced learner (CEFR C1): speak like a native speaker would with a friend',
+};
+const systemPrompt = () => `You are Sam, a friendly, curious native English speaker chatting with a German speaker who wants to improve their English.
+The learner is ${LEVELS[getLevel()] || LEVELS.B1}.
+
+How to reply ("reply"):
+- Answer like a real human in a casual chat: natural, warm, with your own opinions and small stories. Never say you are an AI or a language model.
+- Keep it short (1–4 sentences), like a text message. Usually end with a question or something that keeps the conversation going.
+- Always reply in English, even if the learner writes German. If they write German, gently show how to say it in English as part of the chat.
+- Do not lecture about grammar inside "reply" – corrections go into the separate fields.
+
+Feedback on the learner's LAST message:
+- "correction": the learner's message rewritten in correct, natural English. If they wrote German, this is the English version.
+  Leave it EMPTY if the message was already correct and natural (ignore tiny things like missing capital letters or punctuation).
+- "explanation": if there is a correction, 1–2 short sentences IN GERMAN explaining the main mistake(s). Otherwise empty.
+- "reply_de": a German translation of your reply.`;
+
+const SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    reply: { type: 'STRING' },
+    correction: { type: 'STRING' },
+    explanation: { type: 'STRING' },
+    reply_de: { type: 'STRING' },
+  },
+  required: ['reply', 'correction', 'explanation', 'reply_de'],
+};
+
+/* Gesprächsverlauf für die KI (die letzten 30 Nachrichten, ohne Fehlermeldungen) */
+function history() {
+  const h = messages.filter(m => m.role !== 'err').slice(-30)
+    .map(m => ({ role: m.role === 'me' ? 'user' : 'model', parts: [{ text: m.text }] }));
+  while (h.length && h[0].role !== 'user') h.shift();   // Gemini will mit „user“ beginnen
+  return h;
+}
 
 /* Verfügbare Modelle beim eigenen Schlüssel abfragen (Text-Modelle mit generateContent). */
 let available = [];
@@ -202,11 +258,11 @@ function candidates(model) {
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-async function translate(text, model = getModel()) {
+async function ask(contents, model = getModel()) {
   if (!getKey()) throw new Error('Kein API-Schlüssel eingetragen. Bitte unter ⚙️ eintragen.');
   let lastErr;
   for (const m of candidates(model)) {
-    try { return await translateWith(text, m); }
+    try { return await askWith(contents, m); }
     catch (err) {
       lastErr = err;
       if (!err.retry) throw err;           // z. B. falscher Schlüssel → nicht weiter probieren
@@ -216,13 +272,13 @@ async function translate(text, model = getModel()) {
   throw lastErr;
 }
 
-async function translateWith(text, model) {
+async function askWith(contents, model) {
   const key = getKey();
   const url = `${API}/models/${encodeURIComponent(model)}:generateContent`;
   const body = {
-    systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-    contents: [{ role: 'user', parts: [{ text }] }],
-    generationConfig: { temperature: 0.2 },
+    systemInstruction: { parts: [{ text: systemPrompt() }] },
+    contents,
+    generationConfig: { temperature: 0.8, responseMimeType: 'application/json', responseSchema: SCHEMA },
   };
   let res;
   try {
@@ -242,8 +298,11 @@ async function translateWith(text, model) {
   const cand = json.candidates?.[0];
   const out = (cand?.content?.parts || []).filter(p => !p.thought).map(p => p.text || '').join('').trim();
   if (!out) throw Object.assign(new Error('Leere Antwort von der KI' + (cand?.finishReason ? ` (${cand.finishReason})` : json.promptFeedback?.blockReason ? ` (${json.promptFeedback.blockReason})` : '') + '.'), { retry: true });
+  let data;
+  try { data = JSON.parse(out); } catch { data = { reply: out }; }   // falls das Modell kein JSON liefert
+  if (!data.reply?.trim()) throw Object.assign(new Error('Leere Antwort von der KI.'), { retry: true });
   lastModel = model;
-  return out;
+  return data;
 }
 
 /* ---------- Senden ---------- */
@@ -261,10 +320,18 @@ $('#form').addEventListener('submit', async e => {
   const text = input.value.trim();
   if (!text) return;
   if (!getKey()) { openSettings(); return; }
-  messages.push({ role: 'me', text }); save();
+  const mine = { role: 'me', text };
+  messages.push(mine); save();
   input.value = ''; autosize();
   $('#sendBtn').disabled = true; render(true);
-  try { messages.push({ role: 'ai', text: await translate(text) }); }
+  try {
+    const r = await ask(history());
+    const fix = (r.correction || '').trim();
+    if (fix && fix.toLowerCase().replace(/[^a-z0-9]/g, '') !== text.toLowerCase().replace(/[^a-z0-9]/g, '')) {
+      mine.fix = fix; mine.why = (r.explanation || '').trim();
+    }
+    messages.push({ role: 'ai', text: r.reply.trim(), de: (r.reply_de || '').trim() });
+  }
   catch (err) { console.error(err); messages.push({ role: 'err', text: err.message || String(err) }); }
   save(); $('#sendBtn').disabled = false; render(); input.focus();
 });
@@ -276,7 +343,7 @@ $('#clearBtn').addEventListener('click', () => {
 /* ---------- Einstellungen ---------- */
 let lastModel = '';
 function openSettings() {
-  $('#keyIn').value = getKey(); fillModelSelect(); $('#testOut').textContent = '';
+  $('#keyIn').value = getKey(); $('#levelIn').value = getLevel(); fillModelSelect(); $('#testOut').textContent = '';
   $('#settings').showModal();
 }
 $('#settingsBtn').addEventListener('click', openSettings);
@@ -284,6 +351,7 @@ $('#closeBtn').addEventListener('click', () => $('#settings').close());
 $('#saveBtn').addEventListener('click', () => {
   store.set('gb_key', $('#keyIn').value.trim());
   store.set('gb_model_v2', $('#modelIn').value);
+  store.set('gb_level', $('#levelIn').value);
   $('#settings').close(); render();
 });
 $('#testBtn').addEventListener('click', async () => {
@@ -294,8 +362,8 @@ $('#testBtn').addEventListener('click', async () => {
   await loadModels(); fillModelSelect(sel);
   out.textContent = `Teste (${available.length || FALLBACK_MODELS.length} Modelle verfügbar) …`;
   try {
-    const r = await translate('Guten Morgen', sel);
-    out.textContent = `✅ Klappt mit ${lastModel}: „Guten Morgen“ → „${r}“`;
+    const r = await ask([{ role: 'user', parts: [{ text: 'Hi, how are you?' }] }], sel);
+    out.textContent = `✅ Klappt mit ${lastModel}: „${r.reply}“`;
   }
   catch (err) { out.textContent = '❌ ' + err.message; store.set('gb_key', old); }
 });
