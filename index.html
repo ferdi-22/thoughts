@@ -38,6 +38,10 @@
   #recBtn:disabled{opacity:.5}
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.6)}70%{box-shadow:0 0 0 22px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
   #status{margin-top:12px; color:var(--muted); min-height:1.3em}
+  .meter{height:8px; background:var(--card2); border-radius:99px; overflow:hidden; margin:14px auto 0; max-width:260px; visibility:hidden}
+  .meter.on{visibility:visible}
+  .meter div{height:100%; width:0; background:var(--ok); transition:width .08s}
+  @media (min-width:900px){ main{max-width:760px} }
   #timer{font-variant-numeric:tabular-nums; font-weight:600; color:var(--text)}
   .typerow{display:flex; gap:8px; margin-top:14px}
   .typerow input{flex:1}
@@ -109,7 +113,9 @@
 <main>
   <section class="recorder">
     <button id="recBtn" aria-label="Aufnahme starten">🎙️</button>
+    <div class="meter" id="meter"><div id="meterBar"></div></div>
     <div id="status">Tippen, Gedanken einsprechen, nochmal tippen.</div>
+    <div class="small" id="keyHint" style="display:none;margin-top:4px">Am Laptop: <b>Leertaste</b> startet/stoppt die Aufnahme.</div>
     <div class="typerow">
       <input id="textIn" placeholder="…oder kurz eintippen" enterkeyhint="send">
       <button class="btn primary" id="textBtn">➤</button>
@@ -155,7 +161,7 @@
 <dialog id="settings">
   <h3 style="margin-top:0">Einstellungen</h3>
   <label for="keyIn">Gemini API-Schlüssel</label>
-  <input id="keyIn" type="password" autocomplete="off" placeholder="AIza…">
+  <input id="keyIn" type="password" autocomplete="off" placeholder="AQ.…">
   <div class="small" style="margin-top:6px">Kostenlos erstellen unter
     <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.
     Der Schlüssel bleibt nur auf diesem Gerät gespeichert.</div>
@@ -164,6 +170,13 @@
   <datalist id="models">
     <option value="gemini-flash-latest"><option value="gemini-flash-lite-latest"><option value="gemini-2.5-flash">
   </datalist>
+  <label for="micSel">Mikrofon</label>
+  <div class="typerow" style="margin-top:0">
+    <select id="micSel" style="flex:1;background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:12px;padding:11px 12px;font-size:1rem"></select>
+    <button class="btn" id="micTestBtn">Testen</button>
+  </div>
+  <div class="meter" id="testMeter" style="max-width:none"><div id="testMeterBar"></div></div>
+  <div class="small" id="micHint" style="margin-top:6px"></div>
   <label>Sicherung</label>
   <div class="actions" style="margin-top:0">
     <button class="btn" id="exportAllBtn">Alle als .md</button>
@@ -321,19 +334,118 @@ async function shareNote(n) {
 /* ---------- Aufnahme ---------- */
 let recorder = null, chunks = [], stream = null, startT = 0, timerInt = null;
 
+/* ---------- Mikrofon (Handy + Laptop) ---------- */
+const getMicId = () => localStorage.getItem('gb_mic') || '';
+
+async function getMicStream() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    const e = new Error('nicht unterstützt'); e.name = window.isSecureContext ? 'NotSupportedError' : 'InsecureContext'; throw e;
+  }
+  const base = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+  const id = getMicId();
+  try {
+    return await navigator.mediaDevices.getUserMedia({ audio: id ? { ...base, deviceId: { exact: id } } : base });
+  } catch (e) {
+    // gespeichertes Mikrofon nicht mehr da (z. B. Headset abgesteckt) -> Standardmikrofon
+    if (id && (e.name === 'OverconstrainedError' || e.name === 'NotFoundError')) {
+      localStorage.removeItem('gb_mic');
+      return await navigator.mediaDevices.getUserMedia({ audio: base });
+    }
+    throw e;
+  }
+}
+
+function micErrorText(e) {
+  const mac = /Mac/i.test(navigator.platform || navigator.userAgent);
+  switch (e.name) {
+    case 'InsecureContext':
+      return 'Das Mikrofon geht nur über https:// oder http://localhost. Öffne die App über deine GitHub-Pages-Adresse.';
+    case 'NotAllowedError': case 'SecurityError':
+      return 'Mikrofon blockiert. Klicke links neben der Adresse auf das Schloss/Regler-Symbol → Mikrofon „Zulassen“ und lade neu.' +
+        (mac ? ' Auf dem Mac zusätzlich: Systemeinstellungen → Datenschutz & Sicherheit → Mikrofon → deinen Browser einschalten.' : '');
+    case 'NotFoundError':
+      return 'Kein Mikrofon gefunden. Ist eins angeschlossen bzw. eingeschaltet?';
+    case 'NotReadableError': case 'AbortError':
+      return 'Das Mikrofon wird gerade von einem anderen Programm benutzt (z. B. Zoom/Teams). Schließe es und versuche es nochmal.';
+    case 'NotSupportedError':
+      return 'Dieser Browser kann nicht aufnehmen. Nimm Chrome, Edge, Firefox oder Safari in aktueller Version.';
+    default:
+      return 'Mikrofon-Fehler: ' + (e.message || e.name);
+  }
+}
+
+/* Pegelanzeige, damit man sieht, dass das Mikrofon etwas hört */
+let meterCtx = null, meterRaf = null;
+function startMeter(s, wrap, bar) {
+  try {
+    stopMeter();
+    const AC = window.AudioContext || window.webkitAudioContext;
+    meterCtx = new AC();
+    const an = meterCtx.createAnalyser(); an.fftSize = 512;
+    meterCtx.createMediaStreamSource(s).connect(an);
+    const buf = new Uint8Array(an.fftSize);
+    wrap.classList.add('on');
+    const loop = () => {
+      an.getByteTimeDomainData(buf);
+      let peak = 0; for (const v of buf) peak = Math.max(peak, Math.abs(v - 128));
+      bar.style.width = Math.min(100, peak / 128 * 180) + '%';
+      meterRaf = requestAnimationFrame(loop);
+    };
+    loop();
+  } catch (e) { console.warn('Pegelanzeige nicht möglich', e); }
+}
+function stopMeter(wrap) {
+  cancelAnimationFrame(meterRaf); meterRaf = null;
+  if (meterCtx) { meterCtx.close?.(); meterCtx = null; }
+  document.querySelectorAll('.meter').forEach(m => m.classList.remove('on'));
+}
+
+/* Liste der Mikrofone in den Einstellungen */
+async function fillMicList() {
+  const sel = $('#micSel'), hint = $('#micHint');
+  if (!navigator.mediaDevices?.enumerateDevices) { sel.innerHTML = '<option value="">Standard</option>'; return; }
+  let devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput');
+  const noNames = devs.length && devs.every(d => !d.label);
+  sel.innerHTML = '<option value="">Standard-Mikrofon</option>' + devs
+    .filter(d => d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications')
+    .map((d, i) => `<option value="${esc(d.deviceId)}">${esc(d.label || 'Mikrofon ' + (i + 1))}</option>`).join('');
+  sel.value = getMicId();
+  if (sel.value !== getMicId()) sel.value = '';
+  hint.textContent = noNames ? 'Tipp: Einmal „Testen“ drücken und Zugriff erlauben, dann erscheinen die Namen der Mikrofone.' : '';
+}
+
+let testStream = null, testTimer = null;
+async function testMic() {
+  if (testStream) return endMicTest();
+  localStorage.setItem('gb_mic', $('#micSel').value);
+  try { testStream = await getMicStream(); }
+  catch (e) { $('#micHint').textContent = micErrorText(e); return; }
+  await fillMicList();
+  $('#micTestBtn').textContent = 'Stopp';
+  $('#micHint').textContent = 'Sprich etwas – der grüne Balken sollte ausschlagen.';
+  startMeter(testStream, $('#testMeter'), $('#testMeterBar'));
+  testTimer = setTimeout(endMicTest, 10000);
+}
+function endMicTest() {
+  clearTimeout(testTimer);
+  if (testStream) testStream.getTracks().forEach(t => t.stop());
+  testStream = null; stopMeter(); $('#micTestBtn').textContent = 'Testen';
+}
+
 async function toggleRecording() {
   if (recorder && recorder.state === 'recording') { recorder.stop(); return; }
   if (!getKey()) { openSettings(); toast('Bitte zuerst den API-Schlüssel eintragen.'); return; }
   if (!window.MediaRecorder) { toast('Dein Browser kann nicht aufnehmen – nutze „Sprachmemo hochladen“.'); return; }
-  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-  catch (e) { toast('Kein Mikrofonzugriff. Bitte in den Einstellungen erlauben.'); return; }
+  try { stream = await getMicStream(); }
+  catch (e) { toast(micErrorText(e), 8000); setStatus(esc(micErrorText(e))); return; }
+  startMeter(stream, $('#meter'), $('#meterBar'));
 
   const mime = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm', 'audio/ogg'].find(m => MediaRecorder.isTypeSupported(m)) || '';
   recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
   chunks = [];
   recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
   recorder.onstop = async () => {
-    stream.getTracks().forEach(t => t.stop());
+    stream.getTracks().forEach(t => t.stop()); stopMeter($('#meter'));
     clearInterval(timerInt);
     $('#recBtn').classList.remove('recording'); $('#recBtn').textContent = '🎙️';
     const dauer = Date.now() - startT;
@@ -473,15 +585,16 @@ async function askAI(part) {
     ] }],
     generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA, temperature: 0.3 },
   };
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(getModel())}:generateContent?key=${encodeURIComponent(getKey())}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(getModel())}:generateContent`;
   let res;
-  try { res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
+  try { res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': getKey() }, body: JSON.stringify(body) }); }
   catch { throw new Error('Keine Verbindung zur KI. Bist du online?'); }
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = json.error?.message || res.statusText;
     if (res.status === 429) throw new Error('Kostenloses Limit kurz erreicht – bitte eine Minute warten.');
-    if (res.status === 400 && /API key/i.test(msg)) throw new Error('API-Schlüssel ungültig. Bitte in den Einstellungen prüfen.');
+    if (res.status === 401 || res.status === 403 || (res.status === 400 && /API key/i.test(msg)))
+      throw new Error('API-Schlüssel wird nicht akzeptiert. Bitte in ⚙️ prüfen (komplett kopiert, ohne Leerzeichen?). Details: ' + msg);
     if (res.status === 404) throw new Error(`Modell „${getModel()}“ nicht gefunden. Bitte in den Einstellungen ein anderes wählen.`);
     throw new Error('KI-Fehler: ' + msg);
   }
@@ -542,6 +655,7 @@ function applyResult(r) {
 /* ---------- Einstellungen & Backup ---------- */
 function openSettings() {
   $('#keyIn').value = getKey(); $('#modelIn').value = getModel();
+  fillMicList();
   $('#settings').showModal();
 }
 
@@ -582,9 +696,22 @@ $('#delBtn').onclick = () => {
 
 $('#settingsBtn').onclick = openSettings;
 $('#closeSettingsBtn').onclick = () => $('#settings').close();
+$('#settings').addEventListener('close', endMicTest);
+$('#micTestBtn').onclick = testMic;
+$('#micSel').onchange = () => { localStorage.setItem('gb_mic', $('#micSel').value); if (testStream) { endMicTest(); testMic(); } };
+if (navigator.mediaDevices?.addEventListener) navigator.mediaDevices.addEventListener('devicechange', () => { if ($('#settings').open) fillMicList(); });
+
+// Leertaste = Aufnahme starten/stoppen (nur wenn man nicht gerade tippt)
+document.addEventListener('keydown', e => {
+  if (e.code !== 'Space' || e.repeat) return;
+  if (e.target.closest('input, textarea, select, button, dialog') || $('#detail').classList.contains('open')) return;
+  e.preventDefault(); if (!$('#recBtn').disabled) toggleRecording();
+});
+if (matchMedia('(hover: hover) and (pointer: fine)').matches) $('#keyHint').style.display = '';
 $('#saveSettingsBtn').onclick = () => {
   localStorage.setItem('gb_key', $('#keyIn').value.trim());
   localStorage.setItem('gb_model', $('#modelIn').value.trim() || DEFAULT_MODEL);
+  localStorage.setItem('gb_mic', $('#micSel').value);
   $('#settings').close(); toast('Gespeichert ✔');
 };
 $('#exportAllBtn').onclick = () => {

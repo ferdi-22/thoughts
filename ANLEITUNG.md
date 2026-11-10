@@ -25,7 +25,7 @@ Sachen für den Einkauf landen automatisch in **deiner bestehenden Einkaufsliste
 
 ### 1. Kostenlosen KI-Schlüssel holen
 1. Öffne <https://aistudio.google.com/apikey> und melde dich mit einem Google-Konto an.
-2. „API-Schlüssel erstellen“ → Schlüssel kopieren (beginnt mit `AIza…`).
+2. „API-Schlüssel erstellen“ → Schlüssel kopieren (beginnt mit `AQ.`, das ist das neue Format von Google).
 
 ### 2. App online stellen (nötig, weil das Mikrofon nur über https funktioniert)
 **Variante A – Netlify (am einfachsten):**

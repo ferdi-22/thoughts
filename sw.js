@@ -1,6 +1,6 @@
 // Service Worker: speichert die App selbst, damit sie schnell startet.
 // Die KI-Anfragen gehen immer direkt ins Internet.
-const CACHE = 'gedankenblitz-v1';
+const CACHE = 'gedankenblitz-v2';
 const FILES = ['./', 'index.html', 'manifest.json', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
