@@ -76,6 +76,15 @@
   .starters{display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:18px}
   .starters button{background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:999px;
     padding:8px 14px; font-size:.9rem; cursor:pointer}
+  .scenes{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; margin-top:18px; text-align:left}
+  .scenes button{background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:16px;
+    padding:12px; cursor:pointer; font:inherit; text-align:left}
+  .scenes button:hover{border-color:var(--accent)}
+  .scenes .ico{font-size:1.5rem; display:block}
+  .scenes b{display:block; margin:4px 0 2px}
+  .scenes small{color:var(--muted); font-size:.8rem; line-height:1.3; display:block}
+  .scene-banner{align-self:center; text-align:center; font-size:.85rem; color:var(--muted); background:var(--card);
+    border:1px solid var(--border); border-radius:12px; padding:8px 12px; max-width:90%}
 </style>
 </head>
 <body>
@@ -83,7 +92,7 @@
 <header>
   <div>
     <h1>⚡ Gedankenblitz</h1>
-    <div class="sub">Englisch üben im Chat mit Sam <span class="ver" id="ver"></span></div>
+    <div class="sub"><span id="sceneName">Englisch üben im Chat mit Sam</span> <span class="ver" id="ver"></span></div>
   </div>
   <div>
     <button class="newbtn" id="clearBtn" title="Gespräch neu starten">↺ Neu</button>
@@ -135,7 +144,7 @@
    PATCH (1.4.0 → 1.4.1): kleine Korrekturen, z. B. Texte, Stimme, Farben
    MINOR (1.4.1 → 1.5.0): neue Funktion
    MAJOR (1.5.0 → 2.0.0): App grundlegend umgebaut */
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.7.0';
 
 const DEFAULT_MODEL = 'auto';
 const API = 'https://generativelanguage.googleapis.com/v1beta';
@@ -156,19 +165,51 @@ try { messages = JSON.parse(store.get('gb_talk', '[]')) || []; } catch { message
 const save = () => store.set('gb_talk', JSON.stringify(messages.slice(-200)));
 
 const getLevel = () => store.get('gb_level', 'B1');
+/* Themen & Rollenspiele: Sam spielt eine Rolle, du bist du selbst.
+   "role" ist die Anweisung für die KI (Englisch), "you" erklärt dir auf Deutsch, wer du bist. */
+const SCENARIOS = {
+  free: { icon: '💬', title: 'Freies Gespräch', desc: 'Locker plaudern über alles', you: 'Plaudere mit Sam über alles, was dich interessiert.',
+    role: 'You are Sam, a friendly, curious native English speaker chatting with the learner like a friend. Share your own opinions and small stories.' },
+  restaurant: { icon: '🍽️', title: 'Im Restaurant', desc: 'Sam ist Kellner, du bestellst', you: 'Sam ist Kellner in London, du bist Gast.',
+    role: 'You are Sam, a friendly waiter in a cozy restaurant in London. The learner is a guest. Greet them, show them to a table, mention one or two specials, take the order for drinks, starters and mains, react to special wishes, and later bring the bill. Invent realistic menu items and prices in pounds.' },
+  job: { icon: '💼', title: 'Kollege im Job', desc: 'Smalltalk und Projekte im Büro', you: 'Sam ist dein Kollege in einer internationalen Firma.',
+    role: 'You are Sam, a coworker of the learner at an international company. You meet in the office kitchen. Chat about the weekend, current projects, meetings, deadlines and office life. Ask about their work and occasionally ask for help or an opinion on something work-related.' },
+  interview: { icon: '🎯', title: 'Bewerbungsgespräch', desc: 'Sam stellt typische Fragen', you: 'Sam führt ein Bewerbungsgespräch mit dir. Du bist Bewerber/in.',
+    role: 'You are Sam, a hiring manager at a mid-sized company conducting a job interview with the learner. Start by welcoming them and asking which position they are applying for. Then ask typical interview questions ONE at a time (tell me about yourself, strengths and weaknesses, experience, why this job, a difficult situation, salary expectations, questions for us). React briefly to each answer like a real interviewer. After about 8 questions, close the interview politely.' },
+  hotel: { icon: '🏨', title: 'Hotel-Check-in', desc: 'An der Rezeption einchecken', you: 'Sam arbeitet an der Hotelrezeption in New York, du checkst ein.',
+    role: 'You are Sam, a receptionist at a hotel in New York. The learner is a guest arriving to check in. Ask for their name and booking, ID, explain breakfast times, Wi-Fi and the room, and help with requests or problems (e.g. room not ready, noisy room, late checkout).' },
+  doctor: { icon: '🩺', title: 'Beim Arzt', desc: 'Beschwerden beschreiben', you: 'Sam ist Arzt/Ärztin, du bist Patient/in.',
+    role: 'You are Dr. Sam, a general practitioner in England. The learner is a patient. Ask what brings them in, ask follow-up questions about symptoms, how long and how bad, then give simple advice. Stay realistic but never give alarming diagnoses; this is language practice.' },
+  shopping: { icon: '🛍️', title: 'Einkaufen', desc: 'Kleidung kaufen, umtauschen', you: 'Sam ist Verkäufer/in in einem Kleidungsgeschäft.',
+    role: 'You are Sam, a shop assistant in a clothing store in Manchester. Help the learner find something, ask about size, colour and occasion, suggest items with prices in pounds, handle fitting rooms, payment and returns.' },
+  directions: { icon: '🗺️', title: 'Nach dem Weg fragen', desc: 'Als Tourist unterwegs', you: 'Du bist Tourist/in in New York und sprichst Sam auf der Straße an.',
+    role: 'You are Sam, a friendly local in New York. The learner is a tourist who stops you on the street. Wait for their question, then give directions with landmarks, subway lines and walking times, and chat a bit about sights and food tips.' },
+};
+const getScene = () => (SCENARIOS[store.get('gb_scene', 'free')] ? store.get('gb_scene', 'free') : 'free');
+let picked = messages.length > 0;   // wurde für das aktuelle Gespräch schon ein Thema gewählt?
+
 const STARTERS = ['Hi! How are you today?', 'What did you do last weekend?', 'Can you recommend a good movie?', 'Ich möchte über meinen Job reden.'];
 
 /* ---------- Anzeige ---------- */
 function render(pending = false) {
   const list = $('#list');
+  const sc = SCENARIOS[getScene()];
+  $('#sceneName').textContent = picked ? `${sc.icon} ${sc.title}` : 'Englisch üben im Chat mit Sam';
+  const noKey = getKey() ? '' : '<br><br>Zuerst unter ⚙️ den Gemini-Schlüssel eintragen.';
+  if (!picked) {
+    list.innerHTML = `<div class="empty">👋 Worüber möchtest du heute auf Englisch reden?<br>
+      Sam spielt die passende Rolle. Fehler werden dezent verbessert – fehlt dir ein Wort, schreib es auf Deutsch.${noKey}
+      <div class="scenes">${Object.entries(SCENARIOS).map(([id, x]) =>
+        `<button data-scene="${id}"><span class="ico">${x.icon}</span><b>${esc(x.title)}</b><small>${esc(x.desc)}</small></button>`).join('')}</div></div>`;
+    return;
+  }
+  const banner = `<div class="scene-banner">${sc.icon} <b>${esc(sc.title)}</b> – ${esc(sc.you)}</div>`;
   if (!messages.length && !pending) {
-    list.innerHTML = `<div class="empty">👋 Chatte auf Englisch mit deinem Gesprächspartner <b>Sam</b>.<br>
-      Fehler werden dezent verbessert. Wenn dir ein Wort fehlt, schreib es einfach auf Deutsch.
-      ${getKey() ? '' : '<br><br>Zuerst unter ⚙️ den Gemini-Schlüssel eintragen.'}
+    list.innerHTML = banner + `<div class="empty">Schreib einfach los – oder nimm einen Vorschlag:
       <div class="starters">${STARTERS.map(s => `<button data-start="${esc(s)}">${esc(s)}</button>`).join('')}</div></div>`;
     return;
   }
-  list.innerHTML = messages.map((m, i) => {
+  list.innerHTML = banner + messages.map((m, i) => {
     if (m.role === 'me') return `<div class="msg me">${esc(m.text)}</div>` + (m.fix ? `<div class="fix">
       <b>✏️ Besser:</b> ${esc(m.fix)}${m.why ? `<div class="why">${esc(m.why)}</div>` : ''}</div>` : '');
     if (m.role === 'err') return `<div class="msg err">⚠️ ${esc(m.text)}</div>`;
@@ -179,13 +220,16 @@ function render(pending = false) {
 }
 
 $('#list').addEventListener('click', async e => {
-  const { copy: c, speak: s, de, start } = e.target.dataset;
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  const { copy: c, speak: s, de, start, scene } = btn.dataset;
+  if (scene) return startScene(scene);
   if (start) { input.value = start; autosize(); $('#form').requestSubmit(); }
   if (de != null) { const d = $('#de' + de); d.hidden = !d.hidden; }
   if (c != null) {
-    try { await navigator.clipboard.writeText(messages[c].text); e.target.textContent = 'Kopiert ✓'; }
-    catch { e.target.textContent = 'Nicht möglich'; }
-    setTimeout(() => (e.target.textContent = 'Kopieren'), 1500);
+    try { await navigator.clipboard.writeText(messages[c].text); btn.textContent = 'Kopiert ✓'; }
+    catch { btn.textContent = 'Nicht möglich'; }
+    setTimeout(() => (btn.textContent = 'Kopieren'), 1500);
   }
   if (s != null) speak(messages[s].text);
 });
@@ -213,11 +257,14 @@ const LEVELS = {
   B2: 'an upper-intermediate learner (CEFR B2): speak naturally, occasional idioms are fine',
   C1: 'an advanced learner (CEFR C1): speak like a native speaker would with a friend',
 };
-const systemPrompt = () => `You are Sam, a friendly, curious native English speaker chatting with a German speaker who wants to improve their English.
-The learner is ${LEVELS[getLevel()] || LEVELS.B1}.
+const systemPrompt = () => {
+  const id = getScene(), sc = SCENARIOS[id];
+  return `You are helping a German speaker practise English in a chat.
+${sc.role}
+${id === 'free' ? '' : 'This is a role-play. Stay in your role the whole time and keep the scene realistic. Move the scene forward naturally (e.g. after ordering, the food arrives; then the bill). If the learner wants to stop or change topic, go along with it.\n'}The learner is ${LEVELS[getLevel()] || LEVELS.B1}.
 
 How to reply ("reply"):
-- Answer like a real human in a casual chat: natural, warm, with your own opinions and small stories. Never say you are an AI or a language model.
+- Answer like a real human would in this situation: natural and warm. Never say you are an AI or a language model.
 - Keep it short (1–4 sentences), like a text message. Usually end with a question or something that keeps the conversation going.
 - Always reply in English, even if the learner writes German. If they write German, gently show how to say it in English as part of the chat.
 - Do not lecture about grammar inside "reply" – corrections go into the separate fields.
@@ -226,7 +273,9 @@ Feedback on the learner's LAST message:
 - "correction": the learner's message rewritten in correct, natural English. If they wrote German, this is the English version.
   Leave it EMPTY if the message was already correct and natural (ignore tiny things like missing capital letters or punctuation).
 - "explanation": if there is a correction, 1–2 short sentences IN GERMAN explaining the main mistake(s). Otherwise empty.
-- "reply_de": a German translation of your reply.`;
+- "reply_de": a German translation of your reply.
+If the last user message is exactly "${START}", the conversation has just begun: write your opening line in your role, and leave "correction" and "explanation" empty.`;
+};
 
 const SCHEMA = {
   type: 'OBJECT',
@@ -239,11 +288,15 @@ const SCHEMA = {
   required: ['reply', 'correction', 'explanation', 'reply_de'],
 };
 
+const START = '[start]';
+
 /* Gesprächsverlauf für die KI (die letzten 30 Nachrichten, ohne Fehlermeldungen) */
 function history() {
   const h = messages.filter(m => m.role !== 'err').slice(-30)
     .map(m => ({ role: m.role === 'me' ? 'user' : 'model', parts: [{ text: m.text }] }));
-  while (h.length && h[0].role !== 'user') h.shift();   // Gemini will mit „user“ beginnen
+  // Gemini will, dass das Gespräch mit dem Nutzer beginnt. Fängt Sam an (Rollenspiel),
+  // stellen wir eine unsichtbare Start-Nachricht davor.
+  if (!h.length || h[0].role !== 'user') h.unshift({ role: 'user', parts: [{ text: START }] });
   return h;
 }
 
@@ -341,6 +394,7 @@ $('#form').addEventListener('submit', async e => {
   const text = input.value.trim();
   if (!text) return;
   if (!getKey()) { openSettings(); return; }
+  if (!picked) { store.set('gb_scene', 'free'); picked = true; }
   const mine = { role: 'me', text };
   messages.push(mine); save();
   input.value = ''; autosize();
@@ -357,10 +411,24 @@ $('#form').addEventListener('submit', async e => {
   save(); $('#sendBtn').disabled = false; render(); input.focus();
 });
 
-// Gespräch neu starten: Verlauf leeren, Sam fängt von vorn an
+// Thema wählen: beim freien Gespräch schreibst du zuerst, im Rollenspiel eröffnet Sam die Szene
+async function startScene(id) {
+  if (!getKey()) { openSettings(); return; }
+  store.set('gb_scene', id);
+  messages = []; picked = true; save();
+  if (id === 'free') { render(); input.focus(); return; }
+  $('#sendBtn').disabled = true; render(true);
+  try {
+    const r = await ask(history());
+    messages.push({ role: 'ai', text: r.reply.trim(), de: (r.reply_de || '').trim() });
+  } catch (err) { console.error(err); messages.push({ role: 'err', text: err.message || String(err) }); }
+  save(); $('#sendBtn').disabled = false; render(); input.focus();
+}
+
+// Gespräch neu starten: Verlauf leeren und zurück zur Themenauswahl
 $('#clearBtn').addEventListener('click', () => {
   stopSpeaking();
-  messages = []; save(); render(); input.focus();
+  messages = []; picked = false; save(); render();
 });
 
 /* ---------- Einstellungen ---------- */
